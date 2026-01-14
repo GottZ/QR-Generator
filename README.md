@@ -9,6 +9,8 @@ A modern, privacy-focused QR code generator with a neumorphic design. Runs entir
 ![Accessible](https://img.shields.io/badge/accessibility-WCAG%202.1-green)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
+![QR Generator - Dark and Light Mode](screenshot.png)
+
 ## Features
 
 ### QR Code Types
@@ -90,6 +92,8 @@ qr/
 ├── style.css       # Neumorphic styling & theming
 ├── ce.js           # DOM helper library
 ├── qrcode.js       # QR generation library
+├── screenshot.png  # Dark/light mode preview
+├── LICENSE         # MIT license
 ├── CLAUDE.md       # Technical documentation for AI assistants
 └── README.md       # This file
 ```
@@ -111,6 +115,25 @@ php -S localhost:8000
 
 ## Credits
 
+### Application
+
+**QR Generator** by Jan-Stefan Janetzky (GottZ)
+
+- Website: [gottz.de](https://gottz.de)
+- Contact: [contact.gottz.de](https://contact.gottz.de)
+- License: MIT
+
+### Built with Claude Code
+
+This redesign was created with the help of [Claude Code](https://claude.ai/claude-code), Anthropic's AI-powered coding assistant. Claude Code helped:
+
+- **Unify the design language** - Applying the established neumorphic/skeuomorphic aesthetic from other GottZ projects consistently across all UI components
+- **Implement accessibility** - Adding comprehensive ARIA support, keyboard navigation, screen reader announcements, and reduced-motion preferences
+- **Build custom components** - Creating a fully-styled custom dropdown to replace native selects that couldn't be styled to match the design system
+- **Boost productivity** - Transforming a basic proof-of-concept into a polished, production-ready application through rapid iteration and refinement
+
+The collaboration demonstrates how AI assistants can help developers maintain design consistency across projects while ensuring best practices for accessibility and user experience.
+
 ### QR Code Library
 
 **qrcode.js** by Kazuhiko Arase
@@ -126,14 +149,6 @@ php -S localhost:8000
 **ce.js** by Jan-Stefan Janetzky (GottZ)
 
 - Website: [gottz.de](https://gottz.de)
-- License: MIT
-
-### Application
-
-**QR Generator** by Jan-Stefan Janetzky (GottZ)
-
-- Website: [gottz.de](https://gottz.de)
-- Contact: [contact.gottz.de](https://contact.gottz.de)
 - License: MIT
 
 ## License
