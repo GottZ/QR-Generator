@@ -20,12 +20,12 @@ Live at: https://gottz.de/qr
 - `index.html` - Minimal entry point, most UI is JS-generated
 - `script.js` - Main application logic with custom dropdown component
 - `style.css` - Neumorphic styling with CSS variables, dark/light mode support
-- `qrcode.js` - QR code generation library
-- `/ce.js` - DOM helper function (served from site root)
+- `qrcode.js` - QR code generation library (by Kazuhiko Arase, MIT license)
+- `ce.js` - DOM helper function (by GottZ)
 
 ## The ce() Helper Function
 
-Located at `https://gottz.de/ce.js`, this is a custom DOM creation utility using CSS selector syntax.
+A custom DOM creation utility using CSS selector syntax, created by GottZ.
 
 ### Usage Patterns
 
