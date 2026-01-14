@@ -451,7 +451,7 @@ ce("div.keyboard-hint", outputSection, { innerHTML: "Press <kbd>Ctrl</kbd> + <kb
 
 // Footer
 const footer = ce("footer", container);
-footer.innerHTML = 'Made by <a href="https://contact.gottz.de" target="_blank">GottZ</a>';
+footer.innerHTML = 'Made by <a href="https://contact.gottz.de" target="_blank">GottZ</a> · <a href="https://github.com/GottZ/QR-Generator" target="_blank">GitHub</a>';
 
 // QR Generation Logic
 qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
