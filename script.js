@@ -1,5 +1,190 @@
+// Custom Select Component with full ARIA support
+function createCustomSelect(parent, options, defaultValue, id, labelText) {
+  const wrapper = ce("div.custom-select", parent);
+  if (id) wrapper.id = id;
+
+  // Generate unique IDs for ARIA references
+  const baseId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
+  const listboxId = `${baseId}-listbox`;
+  const labelId = `${baseId}-label`;
+
+  // Find the preceding label element and give it an ID for aria-labelledby
+  const precedingLabel = parent.querySelector("label:last-of-type");
+  if (precedingLabel && !precedingLabel.id) {
+    precedingLabel.id = labelId;
+  }
+
+  const trigger = ce("button.custom-select-trigger", wrapper, {
+    type: "button",
+    textContent: options.find(o => o.value === defaultValue)?.label || options[0]?.label || ""
+  });
+
+  // ARIA attributes for trigger (combobox pattern)
+  trigger.setAttribute("role", "combobox");
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-controls", listboxId);
+  if (precedingLabel) {
+    trigger.setAttribute("aria-labelledby", labelId);
+  }
+
+  const dropdown = ce("div.custom-select-dropdown", wrapper);
+  dropdown.id = listboxId;
+  dropdown.setAttribute("role", "listbox");
+  if (precedingLabel) {
+    dropdown.setAttribute("aria-labelledby", labelId);
+  }
+
+  let currentValue = defaultValue || options[0]?.value;
+  const changeListeners = [];
+
+  // Helper to update ARIA attributes
+  function updateAriaSelected() {
+    dropdown.querySelectorAll(".custom-select-option").forEach(o => {
+      const isSelected = o.dataset.value === currentValue;
+      o.setAttribute("aria-selected", isSelected ? "true" : "false");
+      o.classList.toggle("selected", isSelected);
+    });
+    // Update aria-activedescendant
+    const selectedOption = dropdown.querySelector(`[data-value="${currentValue}"]`);
+    if (selectedOption) {
+      trigger.setAttribute("aria-activedescendant", selectedOption.id);
+    }
+  }
+
+  options.forEach((opt, index) => {
+    const optionId = `${baseId}-option-${index}`;
+    const option = ce("div.custom-select-option", dropdown, {
+      textContent: opt.label
+    });
+    option.id = optionId;
+    option.dataset.value = opt.value;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", opt.value === currentValue ? "true" : "false");
+
+    if (opt.value === currentValue) {
+      option.classList.add("selected");
+      trigger.setAttribute("aria-activedescendant", optionId);
+    }
+
+    option.addEventListener("click", () => {
+      currentValue = opt.value;
+      trigger.textContent = opt.label;
+
+      // Update selected state
+      updateAriaSelected();
+
+      // Close dropdown
+      wrapper.classList.remove("open");
+      trigger.setAttribute("aria-expanded", "false");
+
+      // Return focus to trigger
+      trigger.focus();
+
+      // Fire change event
+      changeListeners.forEach(fn => fn());
+    });
+  });
+
+  // Toggle dropdown
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    // Close other dropdowns
+    document.querySelectorAll(".custom-select.open").forEach(s => {
+      if (s !== wrapper) {
+        s.classList.remove("open");
+        s.querySelector(".custom-select-trigger")?.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    const isOpen = wrapper.classList.toggle("open");
+    trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  // Keyboard navigation
+  trigger.addEventListener("keydown", (e) => {
+    const isOpen = wrapper.classList.contains("open");
+
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const currentIndex = options.findIndex(o => o.value === currentValue);
+      let newIndex;
+
+      if (e.key === "ArrowDown") {
+        newIndex = Math.min(currentIndex + 1, options.length - 1);
+      } else {
+        newIndex = Math.max(currentIndex - 1, 0);
+      }
+
+      if (newIndex !== currentIndex) {
+        const newOpt = options[newIndex];
+        currentValue = newOpt.value;
+        trigger.textContent = newOpt.label;
+
+        updateAriaSelected();
+        changeListeners.forEach(fn => fn());
+      }
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const nowOpen = wrapper.classList.toggle("open");
+      trigger.setAttribute("aria-expanded", nowOpen ? "true" : "false");
+    } else if (e.key === "Escape") {
+      if (isOpen) {
+        wrapper.classList.remove("open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      if (options.length > 0) {
+        currentValue = options[0].value;
+        trigger.textContent = options[0].label;
+        updateAriaSelected();
+        changeListeners.forEach(fn => fn());
+      }
+    } else if (e.key === "End") {
+      e.preventDefault();
+      if (options.length > 0) {
+        currentValue = options[options.length - 1].value;
+        trigger.textContent = options[options.length - 1].label;
+        updateAriaSelected();
+        changeListeners.forEach(fn => fn());
+      }
+    }
+  });
+
+  return {
+    get value() { return currentValue; },
+    set value(v) {
+      const opt = options.find(o => o.value === v);
+      if (opt) {
+        currentValue = v;
+        trigger.textContent = opt.label;
+        updateAriaSelected();
+      }
+    },
+    addEventListener(event, fn) {
+      if (event === "change") {
+        changeListeners.push(fn);
+      }
+    },
+    element: wrapper,
+    trigger: trigger
+  };
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener("click", () => {
+  document.querySelectorAll(".custom-select.open").forEach(s => {
+    s.classList.remove("open");
+    s.querySelector(".custom-select-trigger")?.setAttribute("aria-expanded", "false");
+  });
+});
+
 // Build the UI
 const container = ce("div.container", document.body);
+container.setAttribute("role", "main");
+container.setAttribute("aria-label", "QR Code Generator");
 
 // Header
 const header = ce("header", container);
@@ -12,9 +197,8 @@ const inputSection = ce("div.input-section", inputCard);
 
 // Type selector
 const typeGroup = ce("div.option-group.full-width", inputSection);
-ce("label", typeGroup, { textContent: "Type", htmlFor: "type-select" });
-const typeSelect = ce("select#type-select", typeGroup);
-[
+ce("label", typeGroup, { textContent: "Type" });
+const typeSelect = createCustomSelect(typeGroup, [
   { value: "text", label: "Text / URL" },
   { value: "wifi", label: "WiFi" },
   { value: "email", label: "Email" },
@@ -22,9 +206,7 @@ const typeSelect = ce("select#type-select", typeGroup);
   { value: "sms", label: "SMS" },
   { value: "vcard", label: "Contact (vCard)" },
   { value: "geo", label: "Location" }
-].forEach(opt => {
-  ce("option", typeSelect, { value: opt.value, textContent: opt.label });
-});
+], "text", "type-select");
 
 // Dynamic form container
 const formContainer = ce("div.form-container", inputSection);
@@ -88,11 +270,8 @@ function renderForm(type) {
       ce("label", checkGroup, { textContent: field.label, htmlFor: field.id });
       formFields[field.id] = input;
     } else if (field.type === "select") {
-      ce("label", group, { textContent: field.label, htmlFor: field.id });
-      const select = ce("select#" + field.id, group);
-      field.options.forEach(opt => {
-        ce("option", select, { value: opt.value, textContent: opt.label });
-      });
+      ce("label", group, { textContent: field.label });
+      const select = createCustomSelect(group, field.options, field.options[0]?.value, field.id);
       formFields[field.id] = select;
     } else if (field.type === "textarea") {
       ce("label", group, { textContent: field.label, htmlFor: field.id });
@@ -107,25 +286,29 @@ function renderForm(type) {
 
   // Add event listeners to all form fields
   Object.values(formFields).forEach(field => {
-    field.addEventListener("input", () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(generate, 300);
-    });
-    field.addEventListener("change", () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(generate, 300);
-    });
-    field.addEventListener("keydown", e => {
-      if (e.ctrlKey && e.key === "Enter") {
-        e.preventDefault();
-        generate();
-      }
-    });
+    if (field.addEventListener) {
+      field.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(generate, 300);
+      });
+      field.addEventListener("change", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(generate, 300);
+      });
+    }
+    if (field.tagName) {
+      field.addEventListener("keydown", e => {
+        if (e.ctrlKey && e.key === "Enter") {
+          e.preventDefault();
+          generate();
+        }
+      });
+    }
   });
 
   // Focus first field
   const firstField = Object.values(formFields)[0];
-  if (firstField) firstField.focus();
+  if (firstField?.focus) firstField.focus();
 }
 
 function getQRData() {
@@ -133,10 +316,10 @@ function getQRData() {
 
   switch (type) {
     case "text":
-      return formFields["text-content"]?.value.trim() || "";
+      return formFields["text-content"]?.value?.trim() || "";
 
     case "wifi": {
-      const ssid = formFields["wifi-ssid"]?.value.trim() || "";
+      const ssid = formFields["wifi-ssid"]?.value?.trim() || "";
       const password = formFields["wifi-password"]?.value || "";
       const security = formFields["wifi-security"]?.value || "WPA";
       const hidden = formFields["wifi-hidden"]?.checked ? "true" : "false";
@@ -145,9 +328,9 @@ function getQRData() {
     }
 
     case "email": {
-      const to = formFields["email-to"]?.value.trim() || "";
-      const subject = formFields["email-subject"]?.value.trim() || "";
-      const body = formFields["email-body"]?.value.trim() || "";
+      const to = formFields["email-to"]?.value?.trim() || "";
+      const subject = formFields["email-subject"]?.value?.trim() || "";
+      const body = formFields["email-body"]?.value?.trim() || "";
       if (!to) return "";
       let mailto = `mailto:${encodeURIComponent(to)}`;
       const params = [];
@@ -158,14 +341,14 @@ function getQRData() {
     }
 
     case "phone": {
-      const number = formFields["phone-number"]?.value.trim() || "";
+      const number = formFields["phone-number"]?.value?.trim() || "";
       if (!number) return "";
       return `tel:${number}`;
     }
 
     case "sms": {
-      const number = formFields["sms-number"]?.value.trim() || "";
-      const message = formFields["sms-message"]?.value.trim() || "";
+      const number = formFields["sms-number"]?.value?.trim() || "";
+      const message = formFields["sms-message"]?.value?.trim() || "";
       if (!number) return "";
       let sms = `sms:${number}`;
       if (message) sms += `?body=${encodeURIComponent(message)}`;
@@ -173,13 +356,13 @@ function getQRData() {
     }
 
     case "vcard": {
-      const firstName = formFields["vcard-firstname"]?.value.trim() || "";
-      const lastName = formFields["vcard-lastname"]?.value.trim() || "";
-      const phone = formFields["vcard-phone"]?.value.trim() || "";
-      const email = formFields["vcard-email"]?.value.trim() || "";
-      const org = formFields["vcard-org"]?.value.trim() || "";
-      const title = formFields["vcard-title"]?.value.trim() || "";
-      const url = formFields["vcard-url"]?.value.trim() || "";
+      const firstName = formFields["vcard-firstname"]?.value?.trim() || "";
+      const lastName = formFields["vcard-lastname"]?.value?.trim() || "";
+      const phone = formFields["vcard-phone"]?.value?.trim() || "";
+      const email = formFields["vcard-email"]?.value?.trim() || "";
+      const org = formFields["vcard-org"]?.value?.trim() || "";
+      const title = formFields["vcard-title"]?.value?.trim() || "";
+      const url = formFields["vcard-url"]?.value?.trim() || "";
 
       if (!firstName && !lastName) return "";
 
@@ -196,8 +379,8 @@ function getQRData() {
     }
 
     case "geo": {
-      const lat = formFields["geo-lat"]?.value.trim() || "";
-      const lon = formFields["geo-lon"]?.value.trim() || "";
+      const lat = formFields["geo-lat"]?.value?.trim() || "";
+      const lon = formFields["geo-lon"]?.value?.trim() || "";
       if (!lat || !lon) return "";
       return `geo:${lat},${lon}`;
     }
@@ -211,55 +394,58 @@ function getQRData() {
 const options = ce("div.options", inputSection);
 
 const sizeGroup = ce("div.option-group", options);
-ce("label", sizeGroup, { textContent: "Size", htmlFor: "size-select" });
-const sizeSelect = ce("select#size-select", sizeGroup);
-[
+ce("label", sizeGroup, { textContent: "Size" });
+const sizeSelect = createCustomSelect(sizeGroup, [
   { value: "1", label: "Pixel-perfect" },
   { value: "4", label: "Small" },
   { value: "8", label: "Medium" },
   { value: "12", label: "Large" },
   { value: "16", label: "Extra Large" }
-].forEach(opt => {
-  const option = ce("option", sizeSelect, { value: opt.value, textContent: opt.label });
-  if (opt.value === "8") option.selected = true;
-});
+], "8", "size-select");
 
 const errorGroup = ce("div.option-group", options);
-ce("label", errorGroup, { textContent: "Error Correction", htmlFor: "error-select" });
-const errorSelect = ce("select#error-select", errorGroup);
-[
+ce("label", errorGroup, { textContent: "Error Correction" });
+const errorSelect = createCustomSelect(errorGroup, [
   { value: "L", label: "Low (7%)" },
   { value: "M", label: "Medium (15%)" },
   { value: "Q", label: "Quartile (25%)" },
   { value: "H", label: "High (30%)" }
-].forEach(opt => {
-  ce("option", errorSelect, { value: opt.value, textContent: opt.label });
-});
+], "L", "error-select");
 
 const outlineGroup = ce("div.option-group", options);
-ce("label", outlineGroup, { textContent: "Outline", htmlFor: "outline-select" });
-const outlineSelect = ce("select#outline-select", outlineGroup);
-[
+ce("label", outlineGroup, { textContent: "Outline" });
+const outlineSelect = createCustomSelect(outlineGroup, [
   { value: "0", label: "None" },
   { value: "1", label: "1 unit" },
   { value: "2", label: "2 units" },
   { value: "4", label: "4 units" }
-].forEach(opt => {
-  const option = ce("option", outlineSelect, { value: opt.value, textContent: opt.label });
-  if (opt.value === "1") option.selected = true;
-});
+], "1", "outline-select");
 
 // Output Card
 const outputCard = ce("div.card", container);
+outputCard.setAttribute("aria-label", "QR Code Output");
 const outputSection = ce("div.output-section", outputCard);
 
 const qrContainer = ce("div.qr-container", outputSection);
+qrContainer.setAttribute("role", "img");
+qrContainer.setAttribute("aria-label", "QR code preview area");
+
+// Status element for screen reader announcements
+const statusAnnouncer = ce("div", outputSection, { className: "sr-only" });
+statusAnnouncer.setAttribute("role", "status");
+statusAnnouncer.setAttribute("aria-live", "polite");
+statusAnnouncer.setAttribute("aria-atomic", "true");
+
 const placeholder = ce("div.qr-placeholder", qrContainer, { textContent: "Your QR code will appear here" });
-const img = ce("img", qrContainer, { alt: "QR Code", style: { display: "none" } });
+placeholder.setAttribute("aria-hidden", "true");
+const img = ce("img", qrContainer, { alt: "Generated QR Code", style: { display: "none" } });
 
 const actions = ce("div.actions", outputSection);
+actions.setAttribute("role", "group");
+actions.setAttribute("aria-label", "QR code actions");
 const generateBtn = ce("button.btn-primary", actions, { textContent: "Generate" });
 const downloadBtn = ce("button.btn-secondary", actions, { textContent: "Download", disabled: true });
+downloadBtn.setAttribute("aria-describedby", "download-hint");
 
 ce("div.keyboard-hint", outputSection, { innerHTML: "Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to generate" });
 
@@ -275,6 +461,7 @@ let debounceTimer;
 
 function generate() {
   const text = getQRData();
+  const type = typeSelect.value;
 
   if (!text) {
     img.style.display = "none";
@@ -282,6 +469,7 @@ function generate() {
     placeholder.style.display = "block";
     downloadBtn.disabled = true;
     lastGenerated = null;
+    qrContainer.setAttribute("aria-label", "QR code preview area - empty");
     return;
   }
 
@@ -301,6 +489,23 @@ function generate() {
     placeholder.style.display = "none";
     downloadBtn.disabled = false;
 
+    // Generate descriptive alt text based on QR type
+    const typeLabels = {
+      text: "text content",
+      wifi: "WiFi network credentials",
+      email: "email link",
+      phone: "phone number",
+      sms: "SMS message",
+      vcard: "contact card",
+      geo: "geographic location"
+    };
+    const altText = `Generated QR code containing ${typeLabels[type] || "data"}`;
+    img.alt = altText;
+    qrContainer.setAttribute("aria-label", altText);
+
+    // Announce to screen readers
+    statusAnnouncer.textContent = `QR code generated successfully for ${typeLabels[type] || "your content"}`;
+
     lastGenerated = { dataUrl, text };
   } catch (e) {
     placeholder.textContent = "Content too long for QR code";
@@ -308,6 +513,8 @@ function generate() {
     img.style.display = "none";
     downloadBtn.disabled = true;
     lastGenerated = null;
+    qrContainer.setAttribute("aria-label", "QR code preview area - error");
+    statusAnnouncer.textContent = "Error: Content is too long for QR code";
   }
 }
 
