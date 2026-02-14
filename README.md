@@ -31,6 +31,57 @@ Installable as a standalone app. Works offline after first visit.
 
 **Update mechanism**: Stale-while-revalidate caching. The service worker serves cached files instantly, then fetches fresh versions in the background. If any file changed, a toast notification prompts the user to reload. No version bumping or build step required.
 
+## URL API
+
+Generate QR codes via GET parameters — no UI interaction needed. Append parameters to `https://gottz.de/qr/`.
+
+### Global Parameters
+
+| Parameter | Values | Default |
+|-----------|--------|---------|
+| `type` | `text`, `wifi`, `email`, `phone`, `sms`, `vcard`, `geo`, `bitcoin`, `sepa`, `event` | *(required)* |
+| `size` | `1`, `4`, `8`, `12`, `16` | `8` |
+| `error` | `L`, `M`, `Q`, `H` | `L` |
+| `outline` | `0`, `1`, `2`, `4` | `1` |
+| `plain` | *(flag, presence is enough)* | off |
+
+### Type-specific Parameters
+
+| Type | Parameters |
+|------|-----------|
+| `text` | `content` |
+| `wifi` | `ssid`, `password`, `security` (WPA/WEP/nopass), `hidden` (true/false) |
+| `email` | `to`, `subject`, `body` |
+| `phone` | `number` |
+| `sms` | `number`, `message` |
+| `vcard` | `firstname`, `lastname`, `phone`, `email`, `org`, `title`, `url` |
+| `geo` | `lat`, `lon` |
+| `bitcoin` | `address`, `amount`, `label`, `message` |
+| `sepa` | `name`, `iban`, `amount`, `bic`, `reference` |
+| `event` | `title`, `start`, `end`, `location`, `description` |
+
+`start`/`end` use `datetime-local` format: `YYYY-MM-DDTHH:mm`.
+
+### Plain Mode
+
+Add `&plain` to get a fullscreen QR code with no UI — useful for embedding or kiosk displays.
+
+### Examples
+
+```
+# Simple text
+https://gottz.de/qr/?type=text&content=Hello+World
+
+# WiFi with all options
+https://gottz.de/qr/?type=wifi&ssid=MyNetwork&password=secret&security=WPA
+
+# SEPA payment, high quality, no margin, plain display
+https://gottz.de/qr/?type=sepa&name=Max+Mustermann&iban=DE89370400440532013000&amount=42.00&plain
+
+# Calendar event
+https://gottz.de/qr/?type=event&title=Meeting&start=2025-03-15T14:00&end=2025-03-15T15:00&location=Room+42
+```
+
 ## Privacy
 
 100% client-side. No server requests for QR generation, no analytics, no cookies. The QR library runs locally — your data never leaves the device.

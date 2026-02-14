@@ -613,6 +613,26 @@ kbd {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* Plain mode — fullscreen QR only */
+body.plain {
+  padding: 0;
+  background: white;
+  min-height: 100vh;
+  justify-content: center;
+}
+body.plain .container { max-width: none; gap: 0; }
+body.plain header,
+body.plain .card:first-of-type,
+body.plain footer,
+body.plain .keyboard-hint,
+body.plain .actions,
+body.plain .qr-placeholder,
+body.plain .install-toast,
+body.plain .update-toast { display: none !important; }
+body.plain .card { background: none; box-shadow: none; border: none; padding: 0; border-radius: 0; }
+body.plain .qr-container { background: none; box-shadow: none; padding: 0; border-radius: 0; }
+body.plain .qr-container img { border-radius: 0; max-width: 100vmin; max-height: 100vmin; }
+
 /* Reduced motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -614,9 +614,64 @@ sizeSelect.addEventListener("change", generate);
 errorSelect.addEventListener("change", generate);
 outlineSelect.addEventListener("change", generate);
 
-// Share target handling
+// Query parameter API + Share target handling
+function handleQueryParams(params) {
+  const type = params.get("type");
+  if (!forms[type]) return;
+
+  typeSelect.value = type;
+  renderForm(type);
+
+  // Global options
+  if (params.has("size")) sizeSelect.value = params.get("size");
+  if (params.has("error")) errorSelect.value = params.get("error");
+  if (params.has("outline")) outlineSelect.value = params.get("outline");
+
+  // Field mapping: param name → formFields key
+  const fieldMap = {
+    text:    { content: "text-content" },
+    wifi:    { ssid: "wifi-ssid", password: "wifi-password", security: "wifi-security", hidden: "wifi-hidden" },
+    email:   { to: "email-to", subject: "email-subject", body: "email-body" },
+    phone:   { number: "phone-number" },
+    sms:     { number: "sms-number", message: "sms-message" },
+    vcard:   { firstname: "vcard-firstname", lastname: "vcard-lastname", phone: "vcard-phone", email: "vcard-email", org: "vcard-org", title: "vcard-title", url: "vcard-url" },
+    geo:     { lat: "geo-lat", lon: "geo-lon" },
+    bitcoin: { address: "btc-address", amount: "btc-amount", label: "btc-label", message: "btc-message" },
+    sepa:    { name: "sepa-name", iban: "sepa-iban", amount: "sepa-amount", bic: "sepa-bic", reference: "sepa-reference" },
+    event:   { title: "event-title", start: "event-start", end: "event-end", location: "event-location", description: "event-description" }
+  };
+
+  const map = fieldMap[type];
+  if (map) {
+    for (const [param, fieldId] of Object.entries(map)) {
+      if (!params.has(param)) continue;
+      const field = formFields[fieldId];
+      if (!field) continue;
+      const val = params.get(param);
+      if (field.type === "checkbox") {
+        field.checked = val === "true";
+      } else {
+        field.value = val;
+      }
+    }
+  }
+
+  generate();
+
+  if (params.has("plain")) {
+    document.body.classList.add("plain");
+    document.title = "QR";
+  }
+}
+
 async function checkSharedData() {
   const params = new URLSearchParams(window.location.search);
+
+  // Direct parameter API (takes priority when `type` is present)
+  if (params.has("type")) {
+    handleQueryParams(params);
+    return;
+  }
 
   // Check for POST share data (via service worker)
   if (params.get("shared") === "1") {
