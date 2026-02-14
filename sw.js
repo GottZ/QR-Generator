@@ -1,5 +1,4 @@
-const CACHE_VERSION = 1;
-const CACHE_NAME = "qr-generator-v" + CACHE_VERSION;
+const CACHE_NAME = "qr-generator";
 const SHARE_CACHE = "share-data";
 
 const APP_SHELL = [
@@ -29,9 +28,8 @@ self.addEventListener("activate", (event) => {
           .filter((key) => key !== CACHE_NAME && key !== SHARE_CACHE)
           .map((key) => caches.delete(key))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -49,26 +47,65 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first, network fallback
+  // Only handle same-origin GET requests
+  if (url.origin !== self.location.origin || event.request.method !== "GET") return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (response.ok && url.origin === self.location.origin) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => {
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.match(event.request).then((cached) => {
+        const cachedForCompare = cached?.clone();
+
+        const revalidate = fetch(event.request)
+          .then(async (response) => {
+            if (!response.ok) return response;
+
+            // For text assets, detect content changes before updating cache
+            if (cachedForCompare && isTextAsset(url.pathname)) {
+              const [freshText, oldText] = await Promise.all([
+                response.clone().text(),
+                cachedForCompare.text()
+              ]);
+              if (freshText !== oldText) {
+                await cache.put(event.request, response.clone());
+                notifyClients();
+              }
+              return response;
+            }
+
+            // Binary assets or first-time cache: just update
+            await cache.put(event.request, response.clone());
+            return response;
+          })
+          .catch(() => null);
+
+        if (cached) {
+          // Stale: return cached immediately, revalidate in background
+          event.waitUntil(revalidate);
+          return cached;
+        }
+
+        // No cache — wait for network
+        return revalidate.then((response) => {
+          if (response) return response;
+          // Offline fallback for navigation
           if (event.request.mode === "navigate") {
-            return caches.match("/qr/index.html");
+            return cache.match("/qr/index.html");
           }
+          return new Response("Offline", { status: 503 });
         });
-    })
+      })
+    )
   );
 });
+
+function isTextAsset(pathname) {
+  return /\.(html|css|js|json)$/.test(pathname) || pathname.endsWith("/");
+}
+
+async function notifyClients() {
+  const clients = await self.clients.matchAll({ type: "window" });
+  clients.forEach((client) => client.postMessage({ type: "UPDATE_AVAILABLE" }));
+}
 
 async function handleShareTarget(request) {
   const formData = await request.formData();

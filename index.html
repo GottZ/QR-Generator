@@ -32,6 +32,18 @@
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
+      let _ut;
+      navigator.serviceWorker.addEventListener("message", (e) => {
+        if (e.data?.type !== "UPDATE_AVAILABLE") return;
+        clearTimeout(_ut);
+        _ut = setTimeout(() => {
+          if (document.querySelector(".update-toast")) return;
+          const t = ce("div.update-toast", document.body);
+          ce("span", t, { textContent: "Update available" });
+          const b = ce("button", t, { textContent: "Reload" });
+          b.addEventListener("click", () => location.reload());
+        }, 500);
+      });
     }
   </script>
 </body>
