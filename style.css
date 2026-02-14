@@ -552,8 +552,9 @@ kbd {
   }
 }
 
-/* Update toast */
-.update-toast {
+/* Toasts (update + install) */
+.update-toast,
+.install-toast {
   position: fixed;
   bottom: 24px;
   left: 50%;
@@ -570,12 +571,14 @@ kbd {
   animation: toast-in 0.3s ease;
 }
 
-.update-toast span {
+.update-toast span,
+.install-toast span {
   font-size: 14px;
   color: var(--text);
 }
 
-.update-toast button {
+.update-toast button,
+.install-toast button {
   flex: none;
   padding: 8px 16px;
   font-size: 13px;
@@ -587,8 +590,22 @@ kbd {
   box-shadow: var(--button-shadow);
 }
 
-.update-toast button:hover {
+.update-toast button:hover,
+.install-toast button:hover {
   filter: brightness(1.05);
+}
+
+.install-toast button.dismiss {
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.install-toast button.dismiss:hover {
+  color: var(--text);
 }
 
 @keyframes toast-in {

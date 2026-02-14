@@ -45,6 +45,28 @@
         }, 500);
       });
     }
+    // Install prompt
+    let _ip;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      _ip = e;
+      if (document.querySelector(".install-toast")) return;
+      const t = ce("div.install-toast", document.body);
+      ce("span", t, { textContent: "Install as app" });
+      const b = ce("button", t, { textContent: "Install" });
+      b.addEventListener("click", async () => {
+        t.remove();
+        _ip.prompt();
+        await _ip.userChoice;
+        _ip = null;
+      });
+      const d = ce("button.dismiss", t, { textContent: "\u00d7" });
+      d.addEventListener("click", () => t.remove());
+    });
+    window.addEventListener("appinstalled", () => {
+      _ip = null;
+      document.querySelector(".install-toast")?.remove();
+    });
   </script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+// v2 — install prompt support
 const CACHE_NAME = "qr-generator";
 const SHARE_CACHE = "share-data";
 
