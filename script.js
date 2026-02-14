@@ -540,5 +540,151 @@ sizeSelect.addEventListener("change", generate);
 errorSelect.addEventListener("change", generate);
 outlineSelect.addEventListener("change", generate);
 
+// Share target handling
+async function checkSharedData() {
+  const params = new URLSearchParams(window.location.search);
+
+  // Check for POST share data (via service worker)
+  if (params.get("shared") === "1") {
+    try {
+      const res = await fetch("/qr/get-shared-data");
+      const data = await res.json();
+      if (data) {
+        handleSharedContent(data);
+      }
+    } catch (e) {
+      // ignore
+    }
+    history.replaceState(null, "", window.location.pathname);
+    return;
+  }
+
+  // Check for GET share params
+  const title = params.get("title");
+  const text = params.get("text");
+  const url = params.get("url");
+  if (title || text || url) {
+    handleSharedContent({ title: title || "", text: text || "", url: url || "" });
+    history.replaceState(null, "", window.location.pathname);
+  }
+}
+
+function handleSharedContent(data) {
+  // Determine primary content - prefer file content, then url, then text, then title
+  let content = data.fileContent || data.url || data.text || data.title || "";
+
+  // If we have both url and text, combine them
+  if (data.url && data.text && !data.fileContent) {
+    content = data.text.includes(data.url) ? data.text : data.text + "\n" + data.url;
+  }
+
+  if (!content) return;
+
+  // Auto-detect type based on content
+  if (data.fileType === "text/vcard" || data.fileType === "text/x-vcard" ||
+      (data.fileName && data.fileName.endsWith(".vcf")) ||
+      content.startsWith("BEGIN:VCARD")) {
+    handleSharedVCard(content);
+  } else if (content.startsWith("WIFI:")) {
+    handleSharedWifi(content);
+  } else if (content.startsWith("tel:")) {
+    typeSelect.value = "phone";
+    renderForm("phone");
+    if (formFields["phone-number"]) formFields["phone-number"].value = content.slice(4);
+    generate();
+  } else if (content.startsWith("mailto:")) {
+    handleSharedEmail(content);
+  } else if (content.startsWith("sms:")) {
+    handleSharedSms(content);
+  } else if (content.startsWith("geo:")) {
+    handleSharedGeo(content);
+  } else {
+    typeSelect.value = "text";
+    renderForm("text");
+    if (formFields["text-content"]) formFields["text-content"].value = content;
+    generate();
+  }
+}
+
+function handleSharedVCard(content) {
+  typeSelect.value = "vcard";
+  renderForm("vcard");
+
+  const lines = content.split(/\r?\n/);
+  for (const line of lines) {
+    const [key, ...rest] = line.split(":");
+    const val = rest.join(":");
+    const baseKey = key.split(";")[0].toUpperCase();
+
+    if (baseKey === "FN") {
+      const parts = val.trim().split(/\s+/);
+      if (formFields["vcard-firstname"]) formFields["vcard-firstname"].value = parts[0] || "";
+      if (formFields["vcard-lastname"]) formFields["vcard-lastname"].value = parts.slice(1).join(" ");
+    } else if (baseKey === "N") {
+      const parts = val.split(";");
+      if (formFields["vcard-lastname"]) formFields["vcard-lastname"].value = parts[0] || "";
+      if (formFields["vcard-firstname"]) formFields["vcard-firstname"].value = parts[1] || "";
+    } else if (baseKey === "TEL") {
+      if (formFields["vcard-phone"]) formFields["vcard-phone"].value = val;
+    } else if (baseKey === "EMAIL") {
+      if (formFields["vcard-email"]) formFields["vcard-email"].value = val;
+    } else if (baseKey === "ORG") {
+      if (formFields["vcard-org"]) formFields["vcard-org"].value = val;
+    } else if (baseKey === "TITLE") {
+      if (formFields["vcard-title"]) formFields["vcard-title"].value = val;
+    } else if (baseKey === "URL") {
+      if (formFields["vcard-url"]) formFields["vcard-url"].value = val;
+    }
+  }
+  generate();
+}
+
+function handleSharedWifi(content) {
+  typeSelect.value = "wifi";
+  renderForm("wifi");
+
+  const match = content.match(/WIFI:(?:.*?T:(.*?);)?(?:.*?S:(.*?);)?(?:.*?P:(.*?);)?(?:.*?H:(.*?);)?/);
+  if (match) {
+    if (formFields["wifi-security"] && match[1]) formFields["wifi-security"].value = match[1];
+    if (formFields["wifi-ssid"] && match[2]) formFields["wifi-ssid"].value = match[2];
+    if (formFields["wifi-password"] && match[3]) formFields["wifi-password"].value = match[3];
+    if (formFields["wifi-hidden"] && match[4]) formFields["wifi-hidden"].checked = match[4] === "true";
+  }
+  generate();
+}
+
+function handleSharedEmail(content) {
+  typeSelect.value = "email";
+  renderForm("email");
+
+  const url = new URL(content);
+  if (formFields["email-to"]) formFields["email-to"].value = decodeURIComponent(url.pathname);
+  if (formFields["email-subject"]) formFields["email-subject"].value = url.searchParams.get("subject") || "";
+  if (formFields["email-body"]) formFields["email-body"].value = url.searchParams.get("body") || "";
+  generate();
+}
+
+function handleSharedSms(content) {
+  typeSelect.value = "sms";
+  renderForm("sms");
+
+  const [numberPart, ...rest] = content.slice(4).split("?");
+  if (formFields["sms-number"]) formFields["sms-number"].value = numberPart;
+  const params = new URLSearchParams(rest.join("?"));
+  if (formFields["sms-message"]) formFields["sms-message"].value = params.get("body") || "";
+  generate();
+}
+
+function handleSharedGeo(content) {
+  typeSelect.value = "geo";
+  renderForm("geo");
+
+  const coords = content.slice(4).split(",");
+  if (formFields["geo-lat"] && coords[0]) formFields["geo-lat"].value = coords[0];
+  if (formFields["geo-lon"] && coords[1]) formFields["geo-lon"].value = coords[1];
+  generate();
+}
+
 // Initialize
 renderForm("text");
+checkSharedData();
