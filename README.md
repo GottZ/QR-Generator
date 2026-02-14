@@ -8,7 +8,7 @@ A client-side QR code generator. No backend, no tracking, no nonsense. Everythin
 
 ## What it does
 
-Generates QR codes for seven data types:
+Generates QR codes for ten data types:
 
 - **Text / URL** — plain text or links
 - **WiFi** — SSID, password, security type, hidden flag
@@ -17,6 +17,9 @@ Generates QR codes for seven data types:
 - **SMS** — number + pre-filled message
 - **vCard** — name, phone, email, org, title, URL
 - **Location** — latitude/longitude (geo)
+- **Bitcoin** — BIP21 payment URI with address, amount, label, message
+- **SEPA Payment** — EPC QR code for bank transfers (recipient, IBAN, amount, reference)
+- **Calendar Event** — iCal/VEVENT with title, start/end, location, description
 
 Output is configurable: cell size (1x-16x), error correction (L/M/Q/H), and margin (0-4 units).
 
