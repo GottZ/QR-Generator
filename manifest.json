@@ -4,7 +4,9 @@
   "description": "Generate QR codes instantly for URLs, text, WiFi, contacts and more.",
   "start_url": "/qr/",
   "scope": "/qr/",
+  "id": "/qr/",
   "display": "standalone",
+  "prefer_related_applications": false,
   "orientation": "any",
   "theme_color": "#3cb856",
   "background_color": "#2a2a2e",
@@ -34,19 +36,12 @@
     }
   ],
   "share_target": {
-    "action": "/qr/share-target",
-    "method": "POST",
-    "enctype": "multipart/form-data",
+    "action": "https://gottz.de/qr/",
+    "method": "GET",
     "params": {
       "title": "title",
       "text": "text",
-      "url": "url",
-      "files": [
-        {
-          "name": "files",
-          "accept": ["text/vcard", ".vcf", "text/x-vcard", "text/plain", ".txt", "text/calendar", ".ics"]
-        }
-      ]
+      "url": "url"
     }
   }
 }
