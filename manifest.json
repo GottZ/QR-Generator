@@ -44,7 +44,7 @@
       "files": [
         {
           "name": "files",
-          "accept": ["text/vcard", ".vcf", "text/x-vcard", "text/plain", ".txt"]
+          "accept": ["text/vcard", ".vcf", "text/x-vcard", "text/plain", ".txt", "text/calendar", ".ics"]
         }
       ]
     }

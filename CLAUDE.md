@@ -12,6 +12,9 @@ This project wraps the `qrcode.js` library into a user-friendly interface suppor
 - SMS messages
 - Contact cards (vCard)
 - Geographic locations (geo:)
+- Bitcoin payments (BIP21)
+- SEPA/EPC payments
+- Calendar events (iCal/VEVENT)
 
 Live at: https://gottz.de/qr
 
@@ -20,8 +23,11 @@ Live at: https://gottz.de/qr
 - `index.html` - Minimal entry point, most UI is JS-generated
 - `script.js` - Main application logic with custom dropdown component
 - `style.css` - Neumorphic styling with CSS variables, dark/light mode support
+- `sw.js` - Service worker (stale-while-revalidate + update notification)
+- `manifest.json` - PWA manifest with share_target
 - `qrcode.js` - QR code generation library (by Kazuhiko Arase, MIT license)
 - `ce.js` - DOM helper function (by GottZ)
+- `icons/` - PWA icons (192/512, standard + maskable)
 
 ## The ce() Helper Function
 
@@ -206,7 +212,32 @@ Styled for webkit (Chrome/Safari/Edge) and Firefox to match the theme.
 
 // Location
 `geo:${latitude},${longitude}`
+
+// Bitcoin (BIP21)
+`bitcoin:${address}?amount=${btc}&label=${name}&message=${msg}`
+
+// SEPA/EPC (newline-separated, error correction forced to M)
+`BCD\n002\n1\nSCT\n${bic}\n${name}\n${iban}\nEUR${amount}\n\n\n${reference}\n`
+
+// Calendar Event (iCal)
+`BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${YYYYMMDDTHHmmss}\n...END:VEVENT\nEND:VCALENDAR`
 ```
+
+## Service Worker (sw.js)
+
+### Caching Strategy: Stale-While-Revalidate
+
+The SW serves cached files instantly, then fetches fresh versions from the network in the background. For text assets (HTML, CSS, JS, JSON), it compares response bodies. If content changed, it sends `postMessage({ type: "UPDATE_AVAILABLE" })` to all clients, which triggers an update toast.
+
+### When to update sw.js
+
+- **Content changes to existing files**: NO change to sw.js needed. The stale-while-revalidate strategy detects changes automatically on every page load.
+- **New files added to the project**: Add them to the `APP_SHELL` array in sw.js so they get precached for offline use.
+- **SW logic changes** (new routes, new handlers): Obviously update sw.js.
+
+### SEPA/EPC Error Correction
+
+The EPC spec mandates error correction level M. The `generate()` function overrides the user's error correction selection for SEPA type: `type === "sepa" ? "M" : errorSelect.value`.
 
 ## Testing with Playwright
 

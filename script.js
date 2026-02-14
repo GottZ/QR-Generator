@@ -205,7 +205,10 @@ const typeSelect = createCustomSelect(typeGroup, [
   { value: "phone", label: "Phone" },
   { value: "sms", label: "SMS" },
   { value: "vcard", label: "Contact (vCard)" },
-  { value: "geo", label: "Location" }
+  { value: "geo", label: "Location" },
+  { value: "bitcoin", label: "Bitcoin" },
+  { value: "sepa", label: "SEPA Payment" },
+  { value: "event", label: "Calendar Event" }
 ], "text", "type-select");
 
 // Dynamic form container
@@ -250,6 +253,26 @@ const forms = {
   geo: [
     { id: "geo-lat", label: "Latitude", type: "text", placeholder: "52.5200" },
     { id: "geo-lon", label: "Longitude", type: "text", placeholder: "13.4050" }
+  ],
+  bitcoin: [
+    { id: "btc-address", label: "Address", type: "text", placeholder: "bc1q..." },
+    { id: "btc-amount", label: "Amount (BTC)", type: "text", placeholder: "0.001 (optional)" },
+    { id: "btc-label", label: "Label", type: "text", placeholder: "Recipient name (optional)" },
+    { id: "btc-message", label: "Message", type: "text", placeholder: "Payment description (optional)" }
+  ],
+  sepa: [
+    { id: "sepa-name", label: "Recipient", type: "text", placeholder: "Max Mustermann" },
+    { id: "sepa-iban", label: "IBAN", type: "text", placeholder: "DE89 3704 0044 0532 0130 00" },
+    { id: "sepa-amount", label: "Amount (EUR)", type: "text", placeholder: "10.00 (optional)" },
+    { id: "sepa-bic", label: "BIC", type: "text", placeholder: "COBADEFFXXX (optional)" },
+    { id: "sepa-reference", label: "Reference", type: "text", placeholder: "Invoice 2024-001 (optional)" }
+  ],
+  event: [
+    { id: "event-title", label: "Title", type: "text", placeholder: "Team Meeting" },
+    { id: "event-start", label: "Start", type: "datetime-local" },
+    { id: "event-end", label: "End", type: "datetime-local" },
+    { id: "event-location", label: "Location", type: "text", placeholder: "Conference Room (optional)" },
+    { id: "event-description", label: "Description", type: "textarea", placeholder: "Event details (optional)" }
   ]
 };
 
@@ -385,6 +408,54 @@ function getQRData() {
       return `geo:${lat},${lon}`;
     }
 
+    case "bitcoin": {
+      const address = formFields["btc-address"]?.value?.trim() || "";
+      if (!address) return "";
+      let uri = `bitcoin:${address}`;
+      const params = [];
+      const amount = formFields["btc-amount"]?.value?.trim();
+      const label = formFields["btc-label"]?.value?.trim();
+      const message = formFields["btc-message"]?.value?.trim();
+      if (amount) params.push(`amount=${amount}`);
+      if (label) params.push(`label=${encodeURIComponent(label)}`);
+      if (message) params.push(`message=${encodeURIComponent(message)}`);
+      if (params.length) uri += "?" + params.join("&");
+      return uri;
+    }
+
+    case "sepa": {
+      const name = formFields["sepa-name"]?.value?.trim() || "";
+      const iban = formFields["sepa-iban"]?.value?.trim().replace(/\s/g, "") || "";
+      if (!name || !iban) return "";
+      const bic = formFields["sepa-bic"]?.value?.trim() || "";
+      const amount = formFields["sepa-amount"]?.value?.trim();
+      const reference = formFields["sepa-reference"]?.value?.trim() || "";
+      return [
+        "BCD", "002", "1", "SCT",
+        bic, name, iban,
+        amount ? `EUR${amount}` : "",
+        "", "", reference, ""
+      ].join("\n");
+    }
+
+    case "event": {
+      const title = formFields["event-title"]?.value?.trim() || "";
+      const start = formFields["event-start"]?.value || "";
+      if (!title || !start) return "";
+      const end = formFields["event-end"]?.value || "";
+      const location = formFields["event-location"]?.value?.trim() || "";
+      const description = formFields["event-description"]?.value?.trim() || "";
+      const fmtDate = (d) => d.replace(/[-:]/g, "") + "00";
+      let vcal = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT";
+      vcal += `\nSUMMARY:${title}`;
+      vcal += `\nDTSTART:${fmtDate(start)}`;
+      if (end) vcal += `\nDTEND:${fmtDate(end)}`;
+      if (location) vcal += `\nLOCATION:${location}`;
+      if (description) vcal += `\nDESCRIPTION:${description}`;
+      vcal += "\nEND:VEVENT\nEND:VCALENDAR";
+      return vcal;
+    }
+
     default:
       return "";
   }
@@ -475,7 +546,7 @@ function generate() {
 
   try {
     const size = parseInt(sizeSelect.value, 10);
-    const errorLevel = errorSelect.value;
+    const errorLevel = type === "sepa" ? "M" : errorSelect.value;
     const outline = parseInt(outlineSelect.value, 10);
 
     const qr = qrcode(0, errorLevel);
@@ -497,7 +568,10 @@ function generate() {
       phone: "phone number",
       sms: "SMS message",
       vcard: "contact card",
-      geo: "geographic location"
+      geo: "geographic location",
+      bitcoin: "Bitcoin payment address",
+      sepa: "SEPA payment",
+      event: "calendar event"
     };
     const altText = `Generated QR code containing ${typeLabels[type] || "data"}`;
     img.alt = altText;
@@ -598,6 +672,12 @@ function handleSharedContent(data) {
     handleSharedSms(content);
   } else if (content.startsWith("geo:")) {
     handleSharedGeo(content);
+  } else if (content.startsWith("bitcoin:")) {
+    handleSharedBitcoin(content);
+  } else if (content.startsWith("BCD\n")) {
+    handleSharedSepa(content);
+  } else if (content.startsWith("BEGIN:VCALENDAR") || content.startsWith("BEGIN:VEVENT")) {
+    handleSharedEvent(content);
   } else {
     typeSelect.value = "text";
     renderForm("text");
@@ -683,6 +763,63 @@ function handleSharedGeo(content) {
   if (formFields["geo-lat"] && coords[0]) formFields["geo-lat"].value = coords[0];
   if (formFields["geo-lon"] && coords[1]) formFields["geo-lon"].value = coords[1];
   generate();
+}
+
+function handleSharedBitcoin(content) {
+  typeSelect.value = "bitcoin";
+  renderForm("bitcoin");
+  const match = content.match(/^bitcoin:([^?]+)(?:\?(.*))?$/i);
+  if (match) {
+    if (formFields["btc-address"]) formFields["btc-address"].value = match[1];
+    if (match[2]) {
+      const params = new URLSearchParams(match[2]);
+      if (formFields["btc-amount"]) formFields["btc-amount"].value = params.get("amount") || "";
+      if (formFields["btc-label"]) formFields["btc-label"].value = params.get("label") || "";
+      if (formFields["btc-message"]) formFields["btc-message"].value = params.get("message") || "";
+    }
+  }
+  generate();
+}
+
+function handleSharedSepa(content) {
+  typeSelect.value = "sepa";
+  renderForm("sepa");
+  const lines = content.split("\n");
+  if (formFields["sepa-name"] && lines[5]) formFields["sepa-name"].value = lines[5];
+  if (formFields["sepa-iban"] && lines[6]) formFields["sepa-iban"].value = lines[6];
+  if (formFields["sepa-bic"] && lines[4]) formFields["sepa-bic"].value = lines[4];
+  if (formFields["sepa-amount"] && lines[7]) formFields["sepa-amount"].value = lines[7].replace(/^EUR/i, "");
+  if (formFields["sepa-reference"] && lines[10]) formFields["sepa-reference"].value = lines[10];
+  generate();
+}
+
+function handleSharedEvent(content) {
+  typeSelect.value = "event";
+  renderForm("event");
+  const lines = content.split(/\r?\n/);
+  for (const line of lines) {
+    const [key, ...rest] = line.split(":");
+    const val = rest.join(":");
+    const baseKey = key.split(";")[0].toUpperCase();
+    if (baseKey === "SUMMARY") {
+      if (formFields["event-title"]) formFields["event-title"].value = val;
+    } else if (baseKey === "DTSTART") {
+      if (formFields["event-start"]) formFields["event-start"].value = iCalToLocal(val);
+    } else if (baseKey === "DTEND") {
+      if (formFields["event-end"]) formFields["event-end"].value = iCalToLocal(val);
+    } else if (baseKey === "LOCATION") {
+      if (formFields["event-location"]) formFields["event-location"].value = val;
+    } else if (baseKey === "DESCRIPTION") {
+      if (formFields["event-description"]) formFields["event-description"].value = val;
+    }
+  }
+  generate();
+}
+
+function iCalToLocal(ical) {
+  const s = ical.replace("Z", "");
+  if (s.length < 13) return "";
+  return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(9,11)}:${s.slice(11,13)}`;
 }
 
 // Initialize
