@@ -223,6 +223,29 @@ Styled for webkit (Chrome/Safari/Edge) and Firefox to match the theme.
 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${YYYYMMDDTHHmmss}\n...END:VEVENT\nEND:VCALENDAR`
 ```
 
+## URL Parameter API
+
+QR codes can be generated directly via GET parameters — `handleQueryParams()` in `script.js`.
+
+### Flow
+
+`checkSharedData()` checks for `type` param first (parameter API), then falls back to share target handling. Parameter API does NOT clean the URL (stays shareable), share target does.
+
+### Parameters
+
+- **Global**: `type` (required), `size`, `error`, `outline`, `plain` (flag)
+- **Per type**: mapped via `fieldMap` object (e.g. `content` → `text-content`, `ssid` → `wifi-ssid`)
+
+### Plain Mode
+
+`?plain` flag adds `body.plain` class → CSS hides everything except QR code (fullscreen, white bg). Title set to "QR".
+
+### Field Mapping Logic
+
+- Regular fields: `field.value = paramValue`
+- Checkboxes: `field.checked = paramValue === "true"`
+- Custom selects: `field.value = paramValue` (setter handles trigger text + ARIA update)
+
 ## Service Worker (sw.js)
 
 ### Caching Strategy: Stale-While-Revalidate
