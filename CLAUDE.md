@@ -294,7 +294,7 @@ Two formats supported via `paypal-format` dropdown:
 - **PayPal.me** — default, path-based URL (`https://paypal.me/{user}[/{amount}{currency}]`), username alphanumeric max 20 chars, no description
 - **PayPal Email (Legacy)** — query-parameter URL via `cgi-bin/webscr`, supports description (max 127 chars), URL length counter
 
-Shared currency dropdown with 24 PayPal-supported currencies + "Auto" option. Currencies sorted by locale: detected locale currency first (if not EUR/USD), then EUR, USD, rest alphabetically. Three currencies have 0 decimal places (JPY, HUF, TWD) — decimal input is blocked and validation enforced.
+Shared currency dropdown with 24 PayPal-supported currencies, locale currency pre-selected as default. Currencies sorted by locale: detected locale currency first (if not EUR/USD), then EUR, USD, rest alphabetically. Three currencies have 0 decimal places (JPY, HUF, TWD) — decimal input is blocked and validation enforced.
 
 The `setupPaypalForm()` function handles: format toggle (username ↔ email label, description show/hide), locale-based currency default, amount decimal validation per currency, recipient validation (regex for username vs email), URL length counter with ECL warning.
 
