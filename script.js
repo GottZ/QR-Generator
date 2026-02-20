@@ -288,7 +288,7 @@ function getCurrencyDecimals(code) {
   return PAYPAL_CURRENCIES.find(c => c.code === code)?.decimals ?? 2;
 }
 
-const paypalCurrencyOptions = [{ value: "", label: "\u2014 Auto" }, ...getSortedCurrencyOptions()];
+const paypalCurrencyOptions = getSortedCurrencyOptions();
 
 // Form definitions
 const forms = {
