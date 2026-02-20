@@ -158,9 +158,11 @@ function createCustomSelect(parent, options, defaultValue, id, labelText) {
     set value(v) {
       const opt = options.find(o => o.value === v);
       if (opt) {
+        const changed = v !== currentValue;
         currentValue = v;
         trigger.textContent = opt.label;
         updateAriaSelected();
+        if (changed) changeListeners.forEach(fn => fn());
       }
     },
     addEventListener(event, fn) {
@@ -208,11 +210,85 @@ const typeSelect = createCustomSelect(typeGroup, [
   { value: "geo", label: "Location" },
   { value: "bitcoin", label: "Bitcoin" },
   { value: "sepa", label: "SEPA Payment" },
+  { value: "paypal", label: "PayPal" },
   { value: "event", label: "Calendar Event" }
 ], "text", "type-select");
 
 // Dynamic form container
 const formContainer = ce("div.form-container", inputSection);
+
+// PayPal currency data with locale-based sorting
+const PAYPAL_CURRENCIES = [
+  { code: "AUD", name: "Australian Dollar", decimals: 2 },
+  { code: "BRL", name: "Brazilian Real", decimals: 2 },
+  { code: "CAD", name: "Canadian Dollar", decimals: 2 },
+  { code: "CHF", name: "Swiss Franc", decimals: 2 },
+  { code: "CNY", name: "Chinese Renminbi", decimals: 2 },
+  { code: "CZK", name: "Czech Koruna", decimals: 2 },
+  { code: "DKK", name: "Danish Krone", decimals: 2 },
+  { code: "EUR", name: "Euro", decimals: 2 },
+  { code: "GBP", name: "British Pound", decimals: 2 },
+  { code: "HKD", name: "Hong Kong Dollar", decimals: 2 },
+  { code: "HUF", name: "Hungarian Forint", decimals: 0 },
+  { code: "ILS", name: "Israeli Shekel", decimals: 2 },
+  { code: "JPY", name: "Japanese Yen", decimals: 0 },
+  { code: "MXN", name: "Mexican Peso", decimals: 2 },
+  { code: "MYR", name: "Malaysian Ringgit", decimals: 2 },
+  { code: "NOK", name: "Norwegian Krone", decimals: 2 },
+  { code: "NZD", name: "New Zealand Dollar", decimals: 2 },
+  { code: "PHP", name: "Philippine Peso", decimals: 2 },
+  { code: "PLN", name: "Polish Złoty", decimals: 2 },
+  { code: "SEK", name: "Swedish Krona", decimals: 2 },
+  { code: "SGD", name: "Singapore Dollar", decimals: 2 },
+  { code: "THB", name: "Thai Baht", decimals: 2 },
+  { code: "TWD", name: "New Taiwan Dollar", decimals: 0 },
+  { code: "USD", name: "US Dollar", decimals: 2 }
+];
+
+const LOCALE_CURRENCY_MAP = {
+  AU: "AUD", BR: "BRL", CA: "CAD", CH: "CHF",
+  CN: "CNY", CZ: "CZK", DK: "DKK", GB: "GBP",
+  HK: "HKD", HU: "HUF", IL: "ILS", JP: "JPY",
+  MX: "MXN", MY: "MYR", NO: "NOK", NZ: "NZD",
+  PH: "PHP", PL: "PLN", SE: "SEK", SG: "SGD",
+  TH: "THB", TW: "TWD", US: "USD",
+  DE: "EUR", AT: "EUR", FR: "EUR", ES: "EUR",
+  IT: "EUR", NL: "EUR", BE: "EUR", FI: "EUR",
+  IE: "EUR", PT: "EUR", GR: "EUR", LU: "EUR",
+  SK: "EUR", SI: "EUR", EE: "EUR", LV: "EUR",
+  LT: "EUR", CY: "EUR", MT: "EUR", HR: "EUR"
+};
+
+function getLocaleCurrency() {
+  const lang = navigator.language || navigator.languages?.[0] || "en-US";
+  const country = lang.split("-")[1]?.toUpperCase();
+  return (country && LOCALE_CURRENCY_MAP[country]) || "EUR";
+}
+
+function getSortedCurrencyOptions() {
+  const localeCurrency = getLocaleCurrency();
+  const result = [];
+  const added = new Set();
+
+  if (localeCurrency !== "EUR" && localeCurrency !== "USD") {
+    const c = PAYPAL_CURRENCIES.find(x => x.code === localeCurrency);
+    if (c) { result.push(c); added.add(c.code); }
+  }
+  if (!added.has("EUR")) { result.push(PAYPAL_CURRENCIES.find(x => x.code === "EUR")); added.add("EUR"); }
+  if (!added.has("USD")) { result.push(PAYPAL_CURRENCIES.find(x => x.code === "USD")); added.add("USD"); }
+
+  PAYPAL_CURRENCIES.filter(c => !added.has(c.code))
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .forEach(c => result.push(c));
+
+  return result.map(c => ({ value: c.code, label: `${c.code} \u2014 ${c.name}` }));
+}
+
+function getCurrencyDecimals(code) {
+  return PAYPAL_CURRENCIES.find(c => c.code === code)?.decimals ?? 2;
+}
+
+const paypalCurrencyOptions = [{ value: "", label: "\u2014 Auto" }, ...getSortedCurrencyOptions()];
 
 // Form definitions
 const forms = {
@@ -276,6 +352,16 @@ const forms = {
     ]},
     { id: "sepa-reference", label: "Remittance Text", type: "text", placeholder: "Invoice 2024-001 (optional, max 140)" }
   ],
+  paypal: [
+    { id: "paypal-format", label: "Format", type: "select", options: [
+      { value: "paypalme", label: "PayPal.me" },
+      { value: "paypalemail", label: "PayPal Email (Legacy)" }
+    ]},
+    { id: "paypal-recipient", label: "Username", type: "text", placeholder: "YourPayPalUsername" },
+    { id: "paypal-amount", label: "Amount", type: "text", placeholder: "10.00 (optional)" },
+    { id: "paypal-currency", label: "Currency", type: "select", options: paypalCurrencyOptions },
+    { id: "paypal-description", label: "Description", type: "text", placeholder: "Payment description (optional, max 127)" }
+  ],
   event: [
     { id: "event-title", label: "Title", type: "text", placeholder: "Team Meeting" },
     { id: "event-start", label: "Start", type: "datetime-local" },
@@ -338,8 +424,9 @@ function renderForm(type) {
     }
   });
 
-  // SEPA-specific setup (validation, byte counter, dynamic labels)
+  // Type-specific setup (validation, dynamic labels, counters)
   if (type === "sepa") setupSepaForm();
+  if (type === "paypal") setupPaypalForm();
 
   // Focus first field
   const firstField = Object.values(formFields)[0];
@@ -409,6 +496,96 @@ function setupSepaForm() {
     const valid = !isNaN(num) && num >= 0.01 && num <= 999999999.99 && /^\d+(\.\d{1,2})?$/.test(val);
     amountField.classList.toggle("field-error", !valid);
   });
+}
+
+function setupPaypalForm() {
+  const formatSelect = formFields["paypal-format"];
+  const recipientField = formFields["paypal-recipient"];
+  const recipientLabel = recipientField.parentElement.querySelector("label");
+  const amountField = formFields["paypal-amount"];
+  const currencySelect = formFields["paypal-currency"];
+  const descriptionField = formFields["paypal-description"];
+  const descriptionGroup = descriptionField.parentElement;
+
+  currencySelect.value = getLocaleCurrency();
+
+  const hint = ce("div.form-hint", formContainer);
+  const urlCounter = ce("div.paypal-url-counter", formContainer);
+
+  function updateFormat() {
+    const isMe = formatSelect.value === "paypalme";
+    recipientLabel.textContent = isMe ? "Username" : "Email Address";
+    recipientField.placeholder = isMe ? "YourPayPalUsername" : "your@paypal-email.com";
+    recipientField.maxLength = isMe ? 20 : 254;
+    descriptionGroup.style.display = isMe ? "none" : "";
+    hint.textContent = isMe
+      ? "Amount is a suggestion \u2014 the payer can change it."
+      : "Uses your PayPal account email. Supports a description.";
+    urlCounter.style.display = isMe ? "none" : "";
+    updateUrlCounter();
+  }
+
+  function updateCurrency() {
+    const code = currencySelect.value;
+    const dec = code ? getCurrencyDecimals(code) : 2;
+    amountField.placeholder = dec === 0 ? "100 (optional, no decimals)" : "10.00 (optional)";
+    validateAmount();
+  }
+
+  function validateAmount() {
+    const val = amountField.value.trim();
+    if (!val) { amountField.classList.remove("field-error"); return; }
+    const code = currencySelect.value;
+    const dec = code ? getCurrencyDecimals(code) : 2;
+    const num = parseFloat(val);
+    const valid = dec === 0
+      ? !isNaN(num) && num >= 1 && /^\d+$/.test(val)
+      : !isNaN(num) && num >= 0.01 && /^\d+(\.\d{1,2})?$/.test(val);
+    amountField.classList.toggle("field-error", !valid);
+  }
+
+  function validateRecipient() {
+    const val = recipientField.value.trim();
+    if (!val) { recipientField.classList.remove("field-error"); return; }
+    const valid = formatSelect.value === "paypalme"
+      ? /^[a-zA-Z0-9]{1,20}$/.test(val)
+      : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    recipientField.classList.toggle("field-error", !valid);
+  }
+
+  function updateUrlCounter() {
+    if (formatSelect.value === "paypalme") { urlCounter.style.display = "none"; return; }
+    urlCounter.style.display = "";
+    const url = getQRData();
+    const len = url.length;
+    urlCounter.textContent = len > 150
+      ? `${len} chars \u2014 ECL reduced to L`
+      : `${len} chars`;
+    urlCounter.classList.toggle("over-limit", len > 150);
+  }
+
+  amountField.addEventListener("keydown", (e) => {
+    const code = currencySelect.value;
+    const dec = code ? getCurrencyDecimals(code) : 2;
+    if (dec === 0 && (e.key === "." || e.key === ",")) e.preventDefault();
+  });
+
+  descriptionField.maxLength = 127;
+
+  formatSelect.addEventListener("change", () => { updateFormat(); validateRecipient(); });
+  currencySelect.addEventListener("change", updateCurrency);
+  amountField.addEventListener("input", validateAmount);
+  recipientField.addEventListener("input", validateRecipient);
+
+  Object.values(formFields).forEach(field => {
+    if (field.addEventListener) {
+      field.addEventListener("input", updateUrlCounter);
+      field.addEventListener("change", updateUrlCounter);
+    }
+  });
+
+  updateFormat();
+  updateCurrency();
 }
 
 function getQRData() {
@@ -544,6 +721,30 @@ function getQRData() {
       return lines.join("\n");
     }
 
+    case "paypal": {
+      const format = formFields["paypal-format"]?.value || "paypalme";
+      const recipient = formFields["paypal-recipient"]?.value?.trim() || "";
+      if (!recipient) return "";
+      const amount = formFields["paypal-amount"]?.value?.trim() || "";
+      const currency = formFields["paypal-currency"]?.value || "";
+
+      if (format === "paypalme") {
+        let url = `https://paypal.me/${recipient}`;
+        if (amount) {
+          url += `/${amount}`;
+          if (currency) url += currency;
+        }
+        return url;
+      } else {
+        const description = formFields["paypal-description"]?.value?.trim() || "";
+        let url = `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(recipient)}`;
+        if (amount) url += `&amount=${amount}`;
+        if (currency) url += `&currency_code=${currency}`;
+        if (description) url += `&item_name=${encodeURIComponent(description)}`;
+        return url;
+      }
+    }
+
     case "event": {
       const title = formFields["event-title"]?.value?.trim() || "";
       const start = formFields["event-start"]?.value || "";
@@ -670,7 +871,8 @@ function generate() {
   try {
     const size = parseInt(sizeSelect.value, 10);
     const isEpc = type === "sepa" && formFields["sepa-format"]?.value !== "bezahlcode";
-    const errorLevel = isEpc ? "M" : errorSelect.value;
+    const isPaypal = type === "paypal";
+    const errorLevel = isEpc ? "M" : isPaypal ? (text.length > 150 ? "L" : "M") : errorSelect.value;
     const outline = parseInt(outlineSelect.value, 10);
 
     const qr = qrcode(0, errorLevel);
@@ -695,6 +897,7 @@ function generate() {
       geo: "geographic location",
       bitcoin: "Bitcoin payment address",
       sepa: "SEPA payment",
+      paypal: "PayPal payment link",
       event: "calendar event"
     };
     const altText = `Generated QR code containing ${typeLabels[type] || "data"}`;
@@ -765,6 +968,7 @@ function handleQueryParams(params) {
     geo:     { lat: "geo-lat", lon: "geo-lon" },
     bitcoin: { address: "btc-address", amount: "btc-amount", label: "btc-label", message: "btc-message" },
     sepa:    { format: "sepa-format", name: "sepa-name", iban: "sepa-iban", amount: "sepa-amount", bic: "sepa-bic", reftype: "sepa-reftype", reference: "sepa-reference" },
+    paypal:  { format: "paypal-format", recipient: "paypal-recipient", amount: "paypal-amount", currency: "paypal-currency", description: "paypal-description" },
     event:   { title: "event-title", start: "event-start", end: "event-end", location: "event-location", description: "event-description" }
   };
 
@@ -856,6 +1060,8 @@ function handleSharedContent(data) {
     handleSharedGeo(content);
   } else if (content.startsWith("bitcoin:")) {
     handleSharedBitcoin(content);
+  } else if (content.startsWith("https://paypal.me/") || content.includes("paypal.com/cgi-bin/webscr")) {
+    handleSharedPaypal(content);
   } else if (content.startsWith("BCD\n") || content.startsWith("bank://singlepayment")) {
     handleSharedSepa(content);
   } else if (content.startsWith("BEGIN:VCALENDAR") || content.startsWith("BEGIN:VEVENT")) {
@@ -996,6 +1202,32 @@ function handleSharedSepa(content) {
       if (formFields["sepa-reftype"]) formFields["sepa-reftype"].value = "unstructured";
       if (formFields["sepa-reference"]) formFields["sepa-reference"].value = lines[10];
     }
+  }
+  generate();
+}
+
+function handleSharedPaypal(content) {
+  typeSelect.value = "paypal";
+  renderForm("paypal");
+
+  if (content.includes("paypal.me/")) {
+    if (formFields["paypal-format"]) formFields["paypal-format"].value = "paypalme";
+    const match = content.match(/paypal\.me\/([^/?\s#]+)(?:\/(\d+(?:\.\d+)?)([A-Z]{3})?)?/);
+    if (match) {
+      if (formFields["paypal-recipient"]) formFields["paypal-recipient"].value = match[1];
+      if (formFields["paypal-amount"] && match[2]) formFields["paypal-amount"].value = match[2];
+      if (formFields["paypal-currency"] && match[3]) formFields["paypal-currency"].value = match[3];
+    }
+  } else {
+    if (formFields["paypal-format"]) formFields["paypal-format"].value = "paypalemail";
+    try {
+      const url = new URL(content);
+      const p = url.searchParams;
+      if (formFields["paypal-recipient"]) formFields["paypal-recipient"].value = p.get("business") || "";
+      if (formFields["paypal-amount"]) formFields["paypal-amount"].value = p.get("amount") || "";
+      if (formFields["paypal-currency"]) formFields["paypal-currency"].value = p.get("currency_code") || "";
+      if (formFields["paypal-description"]) formFields["paypal-description"].value = p.get("item_name") || "";
+    } catch (e) { /* ignore */ }
   }
   generate();
 }

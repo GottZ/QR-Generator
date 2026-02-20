@@ -8,7 +8,7 @@ A client-side QR code generator. No backend, no tracking, no nonsense. Everythin
 
 ## What it does
 
-Generates QR codes for ten data types:
+Generates QR codes for eleven data types:
 
 - **Text / URL** — plain text or links
 - **WiFi** — SSID, password, security type, hidden flag
@@ -19,6 +19,7 @@ Generates QR codes for ten data types:
 - **Location** — latitude/longitude (geo)
 - **Bitcoin** — BIP21 payment URI with address, amount, label, message
 - **SEPA Payment** — GiroCode (EPC v002), EPC v001 (legacy), BezahlCode (legacy). IBAN/amount validation, live byte counter, structured/unstructured reference toggle
+- **PayPal** — PayPal.me (username-based) and PayPal Email (legacy). 24 currencies with locale-based sorting, 0-decimal currency handling (JPY/HUF/TWD), URL length counter with auto ECL adjustment
 - **Calendar Event** — iCal/VEVENT with title, start/end, location, description
 
 Output is configurable: cell size (1x-16x), error correction (L/M/Q/H), and margin (0-4 units).
@@ -39,7 +40,7 @@ Generate QR codes via GET parameters — no UI interaction needed. Append parame
 
 | Parameter | Values | Default |
 |-----------|--------|---------|
-| `type` | `text`, `wifi`, `email`, `phone`, `sms`, `vcard`, `geo`, `bitcoin`, `sepa`, `event` | *(required)* |
+| `type` | `text`, `wifi`, `email`, `phone`, `sms`, `vcard`, `geo`, `bitcoin`, `sepa`, `paypal`, `event` | *(required)* |
 | `size` | `1`, `4`, `8`, `12`, `16` | `8` |
 | `error` | `L`, `M`, `Q`, `H` | `L` |
 | `outline` | `0`, `1`, `2`, `4` | `1` |
@@ -58,6 +59,7 @@ Generate QR codes via GET parameters — no UI interaction needed. Append parame
 | `geo` | `lat`, `lon` |
 | `bitcoin` | `address`, `amount`, `label`, `message` |
 | `sepa` | `name`, `iban`, `amount`, `bic`, `reference`, `format` (epc002/epc001/bezahlcode), `reftype` (unstructured/structured) |
+| `paypal` | `recipient`, `amount`, `currency` (ISO 4217), `description` (email only), `format` (paypalme/paypalemail) |
 | `event` | `title`, `start`, `end`, `location`, `description` |
 
 `start`/`end` use `datetime-local` format: `YYYY-MM-DDTHH:mm`.
@@ -80,6 +82,12 @@ https://gottz.de/qr/?type=sepa&name=Max+Mustermann&iban=DE89370400440532013000&a
 
 # SEPA with structured reference and BezahlCode format
 https://gottz.de/qr/?type=sepa&name=Max+Mustermann&iban=DE89370400440532013000&amount=42.00&format=bezahlcode
+
+# PayPal.me with amount and currency
+https://gottz.de/qr/?type=paypal&recipient=YourUsername&amount=25.00&currency=EUR
+
+# PayPal Email (legacy) with description
+https://gottz.de/qr/?type=paypal&format=paypalemail&recipient=shop@example.com&amount=15.00&currency=USD&description=Invoice+2025-001
 
 # Calendar event
 https://gottz.de/qr/?type=event&title=Meeting&start=2025-03-15T14:00&end=2025-03-15T15:00&location=Room+42

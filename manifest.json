@@ -1,7 +1,7 @@
 {
   "name": "QR Generator",
   "short_name": "QR Gen",
-  "description": "Generate QR codes instantly for URLs, text, WiFi, contacts and more.",
+  "description": "Generate QR codes instantly for URLs, text, WiFi, contacts, SEPA, PayPal and more.",
   "start_url": "/qr/",
   "scope": "/qr/",
   "id": "/qr/",

@@ -14,6 +14,7 @@ This project wraps the `qrcode.js` library into a user-friendly interface suppor
 - Geographic locations (geo:)
 - Bitcoin payments (BIP21)
 - SEPA/EPC payments
+- PayPal payments (PayPal.me + PayPal Email Legacy)
 - Calendar events (iCal/VEVENT)
 
 Live at: https://gottz.de/qr
@@ -223,6 +224,14 @@ Styled for webkit (Chrome/Safari/Edge) and Firefox to match the theme.
 // SEPA/EPC v001 (Legacy, same format but version 001, BIC required)
 // BezahlCode (Legacy): bank://singlepaymentsepa?name=...&iban=...&bic=...&amount=10,00&reason=...
 
+// PayPal.me (path-based, NO query params)
+`https://paypal.me/${username}`                  // without amount
+`https://paypal.me/${username}/${amount}`         // with amount, auto currency
+`https://paypal.me/${username}/${amount}${currency}` // with amount + currency (no separator!)
+
+// PayPal Email (Legacy, query-parameter-based)
+`https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${email}[&amount=${amount}][&currency_code=${currency}][&item_name=${description}]`
+
 // Calendar Event (iCal)
 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${YYYYMMDDTHHmmss}\n...END:VEVENT\nEND:VCALENDAR`
 ```
@@ -266,6 +275,10 @@ The SW serves cached files instantly, then fetches fresh versions from the netwo
 
 The EPC spec mandates error correction level M. The `generate()` function overrides the user's error correction selection for EPC formats (v002/v001): `isEpc ? "M" : errorSelect.value`. BezahlCode uses the user's selected ECL.
 
+### PayPal Error Correction
+
+PayPal URLs use ECL M by default. When the URL exceeds 150 characters (typically PayPal Email with description), ECL automatically drops to L to keep the QR code scannable. The URL counter in `setupPaypalForm()` shows a warning when this threshold is crossed.
+
 ### SEPA Format Support
 
 Three formats supported via `sepa-format` dropdown:
@@ -274,6 +287,16 @@ Three formats supported via `sepa-format` dropdown:
 - **BezahlCode (Legacy)** — `bank://singlepaymentsepa?...` URI format, amount uses comma decimal
 
 The `setupSepaForm()` function handles dynamic UI behavior: reference type toggle (structured vs unstructured, mutually exclusive), BIC required/optional label, live byte counter, IBAN format validation, and amount range validation.
+
+### PayPal Format Support
+
+Two formats supported via `paypal-format` dropdown:
+- **PayPal.me** — default, path-based URL (`https://paypal.me/{user}[/{amount}{currency}]`), username alphanumeric max 20 chars, no description
+- **PayPal Email (Legacy)** — query-parameter URL via `cgi-bin/webscr`, supports description (max 127 chars), URL length counter
+
+Shared currency dropdown with 24 PayPal-supported currencies + "Auto" option. Currencies sorted by locale: detected locale currency first (if not EUR/USD), then EUR, USD, rest alphabetically. Three currencies have 0 decimal places (JPY, HUF, TWD) — decimal input is blocked and validation enforced.
+
+The `setupPaypalForm()` function handles: format toggle (username ↔ email label, description show/hide), locale-based currency default, amount decimal validation per currency, recipient validation (regex for username vs email), URL length counter with ECL warning.
 
 ## Testing with Playwright
 
