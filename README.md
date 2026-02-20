@@ -18,7 +18,7 @@ Generates QR codes for ten data types:
 - **vCard** — name, phone, email, org, title, URL
 - **Location** — latitude/longitude (geo)
 - **Bitcoin** — BIP21 payment URI with address, amount, label, message
-- **SEPA Payment** — EPC QR code for bank transfers (recipient, IBAN, amount, reference)
+- **SEPA Payment** — GiroCode (EPC v002), EPC v001 (legacy), BezahlCode (legacy). IBAN/amount validation, live byte counter, structured/unstructured reference toggle
 - **Calendar Event** — iCal/VEVENT with title, start/end, location, description
 
 Output is configurable: cell size (1x-16x), error correction (L/M/Q/H), and margin (0-4 units).
@@ -57,7 +57,7 @@ Generate QR codes via GET parameters — no UI interaction needed. Append parame
 | `vcard` | `firstname`, `lastname`, `phone`, `email`, `org`, `title`, `url` |
 | `geo` | `lat`, `lon` |
 | `bitcoin` | `address`, `amount`, `label`, `message` |
-| `sepa` | `name`, `iban`, `amount`, `bic`, `reference` |
+| `sepa` | `name`, `iban`, `amount`, `bic`, `reference`, `format` (epc002/epc001/bezahlcode), `reftype` (unstructured/structured) |
 | `event` | `title`, `start`, `end`, `location`, `description` |
 
 `start`/`end` use `datetime-local` format: `YYYY-MM-DDTHH:mm`.
@@ -75,8 +75,11 @@ https://gottz.de/qr/?type=text&content=Hello+World
 # WiFi with all options
 https://gottz.de/qr/?type=wifi&ssid=MyNetwork&password=secret&security=WPA
 
-# SEPA payment, high quality, no margin, plain display
-https://gottz.de/qr/?type=sepa&name=Max+Mustermann&iban=DE89370400440532013000&amount=42.00&plain
+# SEPA GiroCode (EPC v002), plain display
+https://gottz.de/qr/?type=sepa&name=Max+Mustermann&iban=DE89370400440532013000&amount=42.00&reference=Invoice+2025-001&plain
+
+# SEPA with structured reference and BezahlCode format
+https://gottz.de/qr/?type=sepa&name=Max+Mustermann&iban=DE89370400440532013000&amount=42.00&format=bezahlcode
 
 # Calendar event
 https://gottz.de/qr/?type=event&title=Meeting&start=2025-03-15T14:00&end=2025-03-15T15:00&location=Room+42

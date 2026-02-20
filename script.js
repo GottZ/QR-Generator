@@ -261,11 +261,20 @@ const forms = {
     { id: "btc-message", label: "Message", type: "text", placeholder: "Payment description (optional)" }
   ],
   sepa: [
+    { id: "sepa-format", label: "Format", type: "select", options: [
+      { value: "epc002", label: "GiroCode (EPC v002)" },
+      { value: "epc001", label: "EPC v001 (Legacy)" },
+      { value: "bezahlcode", label: "BezahlCode (Legacy)" }
+    ]},
     { id: "sepa-name", label: "Recipient", type: "text", placeholder: "Max Mustermann" },
-    { id: "sepa-iban", label: "IBAN", type: "text", placeholder: "DE89 3704 0044 0532 0130 00" },
-    { id: "sepa-amount", label: "Amount (EUR)", type: "text", placeholder: "10.00 (optional)" },
+    { id: "sepa-iban", label: "IBAN", type: "text", placeholder: "DE89370400440532013000" },
     { id: "sepa-bic", label: "BIC", type: "text", placeholder: "COBADEFFXXX (optional)" },
-    { id: "sepa-reference", label: "Reference", type: "text", placeholder: "Invoice 2024-001 (optional)" }
+    { id: "sepa-amount", label: "Amount (EUR)", type: "text", placeholder: "10.00" },
+    { id: "sepa-reftype", label: "Reference Type", type: "select", options: [
+      { value: "unstructured", label: "Remittance Text" },
+      { value: "structured", label: "Structured Reference" }
+    ]},
+    { id: "sepa-reference", label: "Remittance Text", type: "text", placeholder: "Invoice 2024-001 (optional, max 140)" }
   ],
   event: [
     { id: "event-title", label: "Title", type: "text", placeholder: "Team Meeting" },
@@ -329,9 +338,77 @@ function renderForm(type) {
     }
   });
 
+  // SEPA-specific setup (validation, byte counter, dynamic labels)
+  if (type === "sepa") setupSepaForm();
+
   // Focus first field
   const firstField = Object.values(formFields)[0];
   if (firstField?.focus) firstField.focus();
+}
+
+function setupSepaForm() {
+  // Byte counter
+  const byteCounter = ce("div.sepa-byte-counter", formContainer);
+  byteCounter.textContent = "0 / 331 bytes";
+
+  const formatSelect = formFields["sepa-format"];
+  const refTypeSelect = formFields["sepa-reftype"];
+  const refField = formFields["sepa-reference"];
+  const refLabel = refField.parentElement.querySelector("label");
+  const bicField = formFields["sepa-bic"];
+  const bicLabel = bicField.parentElement.querySelector("label");
+
+  // Reference type toggle — updates label and placeholder
+  function updateRefType() {
+    const isStructured = refTypeSelect.value === "structured";
+    refLabel.textContent = isStructured ? "Structured Reference" : "Remittance Text";
+    refField.placeholder = isStructured
+      ? "RF48 5000 0556 3149 (max 35)"
+      : "Invoice 2024-001 (optional, max 140)";
+    refField.maxLength = isStructured ? 35 : 140;
+  }
+  refTypeSelect.addEventListener("change", updateRefType);
+
+  // Format change — BIC required/optional, byte counter visibility
+  function updateFormat() {
+    const fmt = formatSelect.value;
+    const bicRequired = fmt !== "epc002";
+    bicLabel.textContent = bicRequired ? "BIC (required)" : "BIC";
+    bicField.placeholder = bicRequired ? "COBADEFFXXX" : "COBADEFFXXX (optional)";
+    byteCounter.style.display = fmt === "bezahlcode" ? "none" : "";
+  }
+  formatSelect.addEventListener("change", updateFormat);
+
+  // Byte counter update via global helper
+  function updateByteCounter() {
+    updateSepaByteCounter("sepa", getQRData());
+  }
+
+  // Hook byte counter to all field changes
+  Object.values(formFields).forEach(field => {
+    if (field.addEventListener) {
+      field.addEventListener("input", updateByteCounter);
+      field.addEventListener("change", updateByteCounter);
+    }
+  });
+
+  // IBAN validation
+  const ibanField = formFields["sepa-iban"];
+  ibanField.addEventListener("input", () => {
+    const val = ibanField.value.replace(/\s/g, "").toUpperCase();
+    const valid = !val || /^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$/.test(val);
+    ibanField.classList.toggle("field-error", !valid);
+  });
+
+  // Amount validation
+  const amountField = formFields["sepa-amount"];
+  amountField.addEventListener("input", () => {
+    const val = amountField.value.trim();
+    if (!val) { amountField.classList.remove("field-error"); return; }
+    const num = parseFloat(val);
+    const valid = !isNaN(num) && num >= 0.01 && num <= 999999999.99 && /^\d+(\.\d{1,2})?$/.test(val);
+    amountField.classList.toggle("field-error", !valid);
+  });
 }
 
 function getQRData() {
@@ -424,18 +501,47 @@ function getQRData() {
     }
 
     case "sepa": {
+      const format = formFields["sepa-format"]?.value || "epc002";
       const name = formFields["sepa-name"]?.value?.trim() || "";
-      const iban = formFields["sepa-iban"]?.value?.trim().replace(/\s/g, "") || "";
+      const iban = formFields["sepa-iban"]?.value?.trim().replace(/\s/g, "").toUpperCase() || "";
       if (!name || !iban) return "";
-      const bic = formFields["sepa-bic"]?.value?.trim() || "";
-      const amount = formFields["sepa-amount"]?.value?.trim();
+      const bic = formFields["sepa-bic"]?.value?.trim().toUpperCase() || "";
+      const amount = formFields["sepa-amount"]?.value?.trim() || "";
+      const refType = formFields["sepa-reftype"]?.value || "unstructured";
       const reference = formFields["sepa-reference"]?.value?.trim() || "";
-      return [
-        "BCD", "002", "1", "SCT",
-        bic, name, iban,
-        amount ? `EUR${amount}` : "",
-        "", "", reference, ""
-      ].join("\n");
+
+      // BIC required for v001
+      if (format === "epc001" && !bic) return "";
+
+      // BezahlCode: bank://singlepaymentsepa URI
+      if (format === "bezahlcode") {
+        const params = new URLSearchParams();
+        params.set("name", name);
+        params.set("iban", iban);
+        if (bic) params.set("bic", bic);
+        if (amount) params.set("amount", amount.replace(".", ","));
+        if (reference) params.set("reason", reference);
+        return `bank://singlepaymentsepa?${params.toString()}`;
+      }
+
+      // EPC v001 or v002
+      const version = format === "epc001" ? "001" : "002";
+      const amountStr = amount ? `EUR${amount}` : "";
+      const structRef = refType === "structured" ? reference : "";
+      const unstructRef = refType === "unstructured" ? reference : "";
+
+      const lines = [
+        "BCD", version, "1", "SCT",
+        bic, name, iban, amountStr,
+        "", structRef, unstructRef, ""
+      ];
+
+      // Trim trailing empty lines (spec: no trailing LF after last filled line)
+      while (lines.length > 0 && lines[lines.length - 1] === "") {
+        lines.pop();
+      }
+
+      return lines.join("\n");
     }
 
     case "event": {
@@ -530,6 +636,22 @@ qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
 let lastGenerated = null;
 let debounceTimer;
 
+function updateSepaByteCounter(type, payload) {
+  const el = document.querySelector(".sepa-byte-counter");
+  if (!el || type !== "sepa") return;
+  const fmt = formFields["sepa-format"]?.value;
+  if (fmt === "bezahlcode") { el.style.display = "none"; return; }
+  el.style.display = "";
+  if (!payload) {
+    el.textContent = "0 / 331 bytes";
+    el.classList.remove("over-limit");
+    return;
+  }
+  const bytes = new TextEncoder().encode(payload).length;
+  el.textContent = `${bytes} / 331 bytes`;
+  el.classList.toggle("over-limit", bytes > 331);
+}
+
 function generate() {
   const text = getQRData();
   const type = typeSelect.value;
@@ -541,12 +663,14 @@ function generate() {
     downloadBtn.disabled = true;
     lastGenerated = null;
     qrContainer.setAttribute("aria-label", "QR code preview area - empty");
+    updateSepaByteCounter(type, "");
     return;
   }
 
   try {
     const size = parseInt(sizeSelect.value, 10);
-    const errorLevel = type === "sepa" ? "M" : errorSelect.value;
+    const isEpc = type === "sepa" && formFields["sepa-format"]?.value !== "bezahlcode";
+    const errorLevel = isEpc ? "M" : errorSelect.value;
     const outline = parseInt(outlineSelect.value, 10);
 
     const qr = qrcode(0, errorLevel);
@@ -581,6 +705,9 @@ function generate() {
     statusAnnouncer.textContent = `QR code generated successfully for ${typeLabels[type] || "your content"}`;
 
     lastGenerated = { dataUrl, text };
+
+    // Update SEPA byte counter (also needed after programmatic value setting)
+    updateSepaByteCounter(type, text);
   } catch (e) {
     placeholder.textContent = "Content too long for QR code";
     placeholder.style.display = "block";
@@ -637,7 +764,7 @@ function handleQueryParams(params) {
     vcard:   { firstname: "vcard-firstname", lastname: "vcard-lastname", phone: "vcard-phone", email: "vcard-email", org: "vcard-org", title: "vcard-title", url: "vcard-url" },
     geo:     { lat: "geo-lat", lon: "geo-lon" },
     bitcoin: { address: "btc-address", amount: "btc-amount", label: "btc-label", message: "btc-message" },
-    sepa:    { name: "sepa-name", iban: "sepa-iban", amount: "sepa-amount", bic: "sepa-bic", reference: "sepa-reference" },
+    sepa:    { format: "sepa-format", name: "sepa-name", iban: "sepa-iban", amount: "sepa-amount", bic: "sepa-bic", reftype: "sepa-reftype", reference: "sepa-reference" },
     event:   { title: "event-title", start: "event-start", end: "event-end", location: "event-location", description: "event-description" }
   };
 
@@ -729,7 +856,7 @@ function handleSharedContent(data) {
     handleSharedGeo(content);
   } else if (content.startsWith("bitcoin:")) {
     handleSharedBitcoin(content);
-  } else if (content.startsWith("BCD\n")) {
+  } else if (content.startsWith("BCD\n") || content.startsWith("bank://singlepayment")) {
     handleSharedSepa(content);
   } else if (content.startsWith("BEGIN:VCALENDAR") || content.startsWith("BEGIN:VEVENT")) {
     handleSharedEvent(content);
@@ -839,12 +966,37 @@ function handleSharedBitcoin(content) {
 function handleSharedSepa(content) {
   typeSelect.value = "sepa";
   renderForm("sepa");
-  const lines = content.split("\n");
-  if (formFields["sepa-name"] && lines[5]) formFields["sepa-name"].value = lines[5];
-  if (formFields["sepa-iban"] && lines[6]) formFields["sepa-iban"].value = lines[6];
-  if (formFields["sepa-bic"] && lines[4]) formFields["sepa-bic"].value = lines[4];
-  if (formFields["sepa-amount"] && lines[7]) formFields["sepa-amount"].value = lines[7].replace(/^EUR/i, "");
-  if (formFields["sepa-reference"] && lines[10]) formFields["sepa-reference"].value = lines[10];
+
+  if (content.startsWith("bank://")) {
+    // BezahlCode format
+    if (formFields["sepa-format"]) formFields["sepa-format"].value = "bezahlcode";
+    try {
+      const url = new URL(content);
+      const p = url.searchParams;
+      if (formFields["sepa-name"]) formFields["sepa-name"].value = p.get("name") || "";
+      if (formFields["sepa-iban"]) formFields["sepa-iban"].value = p.get("iban") || "";
+      if (formFields["sepa-bic"]) formFields["sepa-bic"].value = p.get("bic") || "";
+      if (formFields["sepa-amount"]) formFields["sepa-amount"].value = (p.get("amount") || "").replace(",", ".");
+      if (formFields["sepa-reference"]) formFields["sepa-reference"].value = p.get("reason") || "";
+    } catch (e) { /* ignore parse error */ }
+  } else {
+    // EPC format (BCD)
+    const lines = content.split("\n");
+    const version = lines[1];
+    if (formFields["sepa-format"]) formFields["sepa-format"].value = version === "001" ? "epc001" : "epc002";
+    if (formFields["sepa-bic"] && lines[4]) formFields["sepa-bic"].value = lines[4];
+    if (formFields["sepa-name"] && lines[5]) formFields["sepa-name"].value = lines[5];
+    if (formFields["sepa-iban"] && lines[6]) formFields["sepa-iban"].value = lines[6];
+    if (formFields["sepa-amount"] && lines[7]) formFields["sepa-amount"].value = lines[7].replace(/^EUR/i, "");
+    // Structured ref (line 10) vs unstructured (line 11)
+    if (lines[9]) {
+      if (formFields["sepa-reftype"]) formFields["sepa-reftype"].value = "structured";
+      if (formFields["sepa-reference"]) formFields["sepa-reference"].value = lines[9];
+    } else if (lines[10]) {
+      if (formFields["sepa-reftype"]) formFields["sepa-reftype"].value = "unstructured";
+      if (formFields["sepa-reference"]) formFields["sepa-reference"].value = lines[10];
+    }
+  }
   generate();
 }
 

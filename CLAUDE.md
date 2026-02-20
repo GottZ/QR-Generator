@@ -216,8 +216,12 @@ Styled for webkit (Chrome/Safari/Edge) and Firefox to match the theme.
 // Bitcoin (BIP21)
 `bitcoin:${address}?amount=${btc}&label=${name}&message=${msg}`
 
-// SEPA/EPC (newline-separated, error correction forced to M)
-`BCD\n002\n1\nSCT\n${bic}\n${name}\n${iban}\nEUR${amount}\n\n\n${reference}\n`
+// SEPA/EPC v002 (12 lines, LF-separated, trailing empty lines trimmed, ECL forced to M)
+// Lines 10 (structured ref) and 11 (remittance text) are mutually exclusive
+`BCD\n002\n1\nSCT\n${bic}\n${name}\n${iban}\nEUR${amount}\n${purpose}\n${structRef}\n${unstructRef}\n${info}`
+
+// SEPA/EPC v001 (Legacy, same format but version 001, BIC required)
+// BezahlCode (Legacy): bank://singlepaymentsepa?name=...&iban=...&bic=...&amount=10,00&reason=...
 
 // Calendar Event (iCal)
 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${YYYYMMDDTHHmmss}\n...END:VEVENT\nEND:VCALENDAR`
@@ -260,7 +264,16 @@ The SW serves cached files instantly, then fetches fresh versions from the netwo
 
 ### SEPA/EPC Error Correction
 
-The EPC spec mandates error correction level M. The `generate()` function overrides the user's error correction selection for SEPA type: `type === "sepa" ? "M" : errorSelect.value`.
+The EPC spec mandates error correction level M. The `generate()` function overrides the user's error correction selection for EPC formats (v002/v001): `isEpc ? "M" : errorSelect.value`. BezahlCode uses the user's selected ECL.
+
+### SEPA Format Support
+
+Three formats supported via `sepa-format` dropdown:
+- **GiroCode (EPC v002)** — default, BIC optional in EWR, 12-line LF-separated payload, max 331 bytes
+- **EPC v001 (Legacy)** — BIC required, otherwise identical to v002
+- **BezahlCode (Legacy)** — `bank://singlepaymentsepa?...` URI format, amount uses comma decimal
+
+The `setupSepaForm()` function handles dynamic UI behavior: reference type toggle (structured vs unstructured, mutually exclusive), BIC required/optional label, live byte counter, IBAN format validation, and amount range validation.
 
 ## Testing with Playwright
 

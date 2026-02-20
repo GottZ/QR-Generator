@@ -633,6 +633,26 @@ body.plain .card { background: none; box-shadow: none; border: none; padding: 0;
 body.plain .qr-container { background: none; box-shadow: none; padding: 0; border-radius: 0; }
 body.plain .qr-container img { border-radius: 0; max-width: 100vmin; max-height: 100vmin; }
 
+/* SEPA byte counter */
+.sepa-byte-counter {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  padding: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sepa-byte-counter.over-limit {
+  color: #ff4444;
+  font-weight: 600;
+}
+
+/* Field validation error */
+.field-error {
+  border-color: #ff4444 !important;
+  box-shadow: var(--input-shadow), 0 0 0 2px rgba(255, 68, 68, 0.3) !important;
+}
+
 /* Reduced motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   *,
