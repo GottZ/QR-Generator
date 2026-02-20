@@ -523,6 +523,23 @@ kbd {
   border-radius: var(--radius-sm);
 }
 
+.custom-select.disabled .custom-select-trigger {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.epc-override {
+  margin-bottom: 4px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.epc-override label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* Smaller variant for options row */
 .options .custom-select-trigger {
   padding: 10px 32px 10px 12px;
@@ -662,11 +679,6 @@ body.plain .qr-container img { border-radius: 0; max-width: 100vmin; max-height:
   text-align: right;
   padding: 4px 0;
   font-variant-numeric: tabular-nums;
-}
-
-.paypal-url-counter.over-limit {
-  color: #ff4444;
-  font-weight: 600;
 }
 
 /* Field validation error */

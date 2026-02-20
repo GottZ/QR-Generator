@@ -89,6 +89,7 @@ function createCustomSelect(parent, options, defaultValue, id, labelText) {
   // Toggle dropdown
   trigger.addEventListener("click", (e) => {
     e.stopPropagation();
+    if (trigger.getAttribute("aria-disabled") === "true") return;
 
     // Close other dropdowns
     document.querySelectorAll(".custom-select.open").forEach(s => {
@@ -104,6 +105,7 @@ function createCustomSelect(parent, options, defaultValue, id, labelText) {
 
   // Keyboard navigation
   trigger.addEventListener("keydown", (e) => {
+    if (trigger.getAttribute("aria-disabled") === "true") return;
     const isOpen = wrapper.classList.contains("open");
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -464,7 +466,10 @@ function setupSepaForm() {
     bicField.placeholder = bicRequired ? "COBADEFFXXX" : "COBADEFFXXX (optional)";
     byteCounter.style.display = fmt === "bezahlcode" ? "none" : "";
   }
-  formatSelect.addEventListener("change", updateFormat);
+  formatSelect.addEventListener("change", () => {
+    updateFormat();
+    updateEclState();
+  });
 
   // Byte counter update via global helper
   function updateByteCounter() {
@@ -558,10 +563,7 @@ function setupPaypalForm() {
     urlCounter.style.display = "";
     const url = getQRData();
     const len = url.length;
-    urlCounter.textContent = len > 150
-      ? `${len} chars \u2014 ECL reduced to L`
-      : `${len} chars`;
-    urlCounter.classList.toggle("over-limit", len > 150);
+    urlCounter.textContent = `${len} chars`;
   }
 
   amountField.addEventListener("keydown", (e) => {
@@ -790,6 +792,12 @@ const errorSelect = createCustomSelect(errorGroup, [
   { value: "H", label: "High (30%)" }
 ], "L", "error-select");
 
+// EPC override checkbox (hidden by default, shown for SEPA EPC formats)
+const epcOverrideGroup = ce("div.checkbox-group.epc-override", errorGroup);
+const epcOverrideCheckbox = ce("input#epc-override", epcOverrideGroup, { type: "checkbox", checked: true });
+ce("label", epcOverrideGroup, { textContent: "EPC override (Medium)", htmlFor: "epc-override" });
+epcOverrideGroup.style.display = "none";
+
 const outlineGroup = ce("div.option-group", options);
 ce("label", outlineGroup, { textContent: "Outline" });
 const outlineSelect = createCustomSelect(outlineGroup, [
@@ -871,8 +879,8 @@ function generate() {
   try {
     const size = parseInt(sizeSelect.value, 10);
     const isEpc = type === "sepa" && formFields["sepa-format"]?.value !== "bezahlcode";
-    const isPaypal = type === "paypal";
-    const errorLevel = isEpc ? "M" : isPaypal ? (text.length > 150 ? "L" : "M") : errorSelect.value;
+    const epcForceM = isEpc && epcOverrideCheckbox.checked;
+    const errorLevel = epcForceM ? "M" : errorSelect.value;
     const outline = parseInt(outlineSelect.value, 10);
 
     const qr = qrcode(0, errorLevel);
@@ -931,12 +939,36 @@ function download() {
   link.click();
 }
 
+// ECL override — only relevant for SEPA EPC formats (spec requires M)
+function updateEclState() {
+  const isEpc = typeSelect.value === "sepa" && formFields["sepa-format"]?.value !== "bezahlcode";
+  const overrideActive = epcOverrideCheckbox.checked;
+
+  epcOverrideGroup.style.display = isEpc ? "" : "none";
+
+  if (isEpc && overrideActive) {
+    errorSelect.element.classList.add("disabled");
+    errorSelect.trigger.setAttribute("aria-disabled", "true");
+    errorSelect.trigger.tabIndex = -1;
+  } else {
+    errorSelect.element.classList.remove("disabled");
+    errorSelect.trigger.removeAttribute("aria-disabled");
+    errorSelect.trigger.tabIndex = 0;
+  }
+}
+
+epcOverrideCheckbox.addEventListener("change", () => {
+  updateEclState();
+  generate();
+});
+
 // Event Listeners
 generateBtn.addEventListener("click", generate);
 downloadBtn.addEventListener("click", download);
 
 typeSelect.addEventListener("change", () => {
   renderForm(typeSelect.value);
+  updateEclState();
   generate();
 });
 
@@ -956,6 +988,7 @@ function handleQueryParams(params) {
   if (params.has("size")) sizeSelect.value = params.get("size");
   if (params.has("error")) errorSelect.value = params.get("error");
   if (params.has("outline")) outlineSelect.value = params.get("outline");
+  if (params.has("epc_override")) epcOverrideCheckbox.checked = params.get("epc_override") !== "false";
 
   // Field mapping: param name → formFields key
   const fieldMap = {
@@ -987,6 +1020,7 @@ function handleQueryParams(params) {
     }
   }
 
+  updateEclState();
   generate();
 
   if (params.has("plain")) {

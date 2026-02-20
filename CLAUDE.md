@@ -217,7 +217,7 @@ Styled for webkit (Chrome/Safari/Edge) and Firefox to match the theme.
 // Bitcoin (BIP21)
 `bitcoin:${address}?amount=${btc}&label=${name}&message=${msg}`
 
-// SEPA/EPC v002 (12 lines, LF-separated, trailing empty lines trimmed, ECL forced to M)
+// SEPA/EPC v002 (12 lines, LF-separated, trailing empty lines trimmed, ECL default M via override checkbox)
 // Lines 10 (structured ref) and 11 (remittance text) are mutually exclusive
 `BCD\n002\n1\nSCT\n${bic}\n${name}\n${iban}\nEUR${amount}\n${purpose}\n${structRef}\n${unstructRef}\n${info}`
 
@@ -246,7 +246,7 @@ QR codes can be generated directly via GET parameters — `handleQueryParams()` 
 
 ### Parameters
 
-- **Global**: `type` (required), `size`, `error`, `outline`, `plain` (flag)
+- **Global**: `type` (required), `size`, `error`, `outline`, `epc_override` (default `true`, set `false` to disable SEPA EPC ECL override), `plain` (flag)
 - **Per type**: mapped via `fieldMap` object (e.g. `content` → `text-content`, `ssid` → `wifi-ssid`)
 
 ### Plain Mode
@@ -273,11 +273,7 @@ The SW serves cached files instantly, then fetches fresh versions from the netwo
 
 ### SEPA/EPC Error Correction
 
-The EPC spec mandates error correction level M. The `generate()` function overrides the user's error correction selection for EPC formats (v002/v001): `isEpc ? "M" : errorSelect.value`. BezahlCode uses the user's selected ECL.
-
-### PayPal Error Correction
-
-PayPal URLs use ECL M by default. When the URL exceeds 150 characters (typically PayPal Email with description), ECL automatically drops to L to keep the QR code scannable. The URL counter in `setupPaypalForm()` shows a warning when this threshold is crossed.
+The EPC spec mandates error correction level M. For EPC formats (v002/v001), an "EPC override (Medium)" checkbox is shown above the ECL select. When checked (default), ECL is forced to M and the select is disabled. The user can uncheck it to choose a custom ECL at their own risk. BezahlCode uses the user's selected ECL without override. The `updateEclState()` function manages checkbox visibility and select disabled state. PayPal and all other types use the user's ECL selection directly.
 
 ### SEPA Format Support
 
@@ -296,7 +292,7 @@ Two formats supported via `paypal-format` dropdown:
 
 Shared currency dropdown with 24 PayPal-supported currencies, locale currency pre-selected as default. Currencies sorted by locale: detected locale currency first (if not EUR/USD), then EUR, USD, rest alphabetically. Three currencies have 0 decimal places (JPY, HUF, TWD) — decimal input is blocked and validation enforced.
 
-The `setupPaypalForm()` function handles: format toggle (username ↔ email label, description show/hide), locale-based currency default, amount decimal validation per currency, recipient validation (regex for username vs email), URL length counter with ECL warning.
+The `setupPaypalForm()` function handles: format toggle (username ↔ email label, description show/hide), locale-based currency default, amount decimal validation per currency, recipient validation (regex for username vs email), URL length counter.
 
 ## Testing with Playwright
 
